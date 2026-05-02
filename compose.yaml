@@ -1,0 +1,15 @@
+services:
+  timepoint:
+    build:
+      context: .
+    container_name: timepoint
+    ports:
+      - "80:80"
+      # Alternative ohne Port-80-Konflikt:
+      # - "8080:80"
+    volumes:
+      - timepoint_data:/var/www/html/assets/db
+    restart: unless-stopped
+
+volumes:
+  timepoint_data:
