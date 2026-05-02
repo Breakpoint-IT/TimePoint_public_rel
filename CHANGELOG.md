@@ -1,79 +1,127 @@
-# TimePoint Changelog
+# 📌 TimePoint Changelog
 
-## Changelog
+All notable changes to this project will be documented in this file.  
+This project follows a structured versioning approach.
 
-### Release 1.0.3 in Bearbeitung
-- [] Browser Extensions Bugfixes und first Public Release.
-- [] Impressum und Datenschutz können jetzt direkt im Browser bearbeitet werden. 
-- [] Strukturelle Verbesserungen
-   - [] Anpassung und Optimierung der Ordnerstruktur.
-   - [x] Entfernung von alten Dateien.
+---
 
-### Release 1.0.2
-- [x] SMTP Implementierung in den Einstellungen.
-- [x] Passwort vergessen Funktion.
-- [x] Vollständige Docker Implementierung.
-- [x] Möglichkeit PDF, PDF/A E-Mail Versand an einen oder mehrere Mitarbeiter über die Supervisoren Export Oberfläche.
-- [x] Audit Log (wer hat was geändert, keine nachträgliche Manipulation ohne Log inkl. Hash-Kettenprüfung).
-- [x] Audit-Prüfung wurde implementiert.
-- [x] Audit Log Exportfunktion (CSV, JSON, CSV).
-- [x] manage.sh Script zur Verwaltung des Docker Containers und Backup Funktionen der Datenbank und des Audit Logs.
-   - [x] backup.sh Script zur Erstellung eines SQL Backups der Datenbank und des Audit Logs.
-   - [x] Start, restart und Stop Script für die einfache Verwaltung des Docker Containers.
-- [x] Funktionsüberprüfung mit Docker Container und Nativ.
-- [x] Vollständige Docker Implementierung.
+## 🚧 [1.0.3] - In Progress
 
-### Release 1.0.1
-- [x] Mitarbeiter können Ihr Passwort ändern.
-- [x] Administratoren können Mitarbeiter Namen ändern.
-- [x] Administratoren können beim Erstellen eines neuen Mitarbeiters auswählen das ein neuer Mitarbeiter beim ersten Login das Passwort ändern muss.
-- [x] PDF/A Export für Langzeitarchivierung wurde hinzugefügt.
-- [x] Entwickler-Informationen mit To-Do's und Changelog Informationen.
-- [x] Impressum und Datenschutz kann jetzt einzeln in den Admin Einstellungen ein und ausgeblendet werden.
-- [x] Datenbank ex und import wurde von den Einstellungen in den Admin Bereich verschoben.
+### ✨ Improvements
+- Browser extension bug fixes and preparation for first public release  
+- Legal notice (Imprint) and privacy policy can now be edited directly in the browser  
 
+### 🏗️ Structural Changes
+- Folder structure optimization and cleanup  
+- Removed legacy files  
 
-### Release 1.0.0
-- [x] Erstes Public Release.
-- [x] Zahlreiche Bugfixes und Verbesserungen sowie grundlegende Überarbeitungen.
-- [x] Automatischer Pausenabzug möglich.
-- [x] PDF Generierung -> Farbliche Kennzeichnung von Urlaub, Feiertagen und Krankheit.
-- [x] Dark Mode wurde nicht geladen bzw. wurde teilweise falsch dargestellt.
-- [x] UI Verbesserungen:
-    - [x] Dashboard: Genommener und Resturlaub sowie Krankheitstage werden angezeigt.
-    - [x] Jeder Mitarbeiter wird jetzt beim Namen genannt.
-    - [x] Vor der Stempelzeit steht jetzt: "Aktuelle Arbeitszeit:".
-    - [x] Dropdown Menü im Mitarbeitername integriert.
+---
 
-## Geplante Features
+## ✅ [1.0.2]
 
-- [] Backup Strategie:
-    - [] Automatischer Backup Job (Tag, Woche, Monat).
-    - [] Backup Speicherort: Cloud Storage (AWS S3, Google Cloud Storage, Azure Blob Storage), NAS.
-    - [] Backup Versionsverwaltung.
+### ✨ Features
+- SMTP configuration added to settings  
+- "Forgot Password" functionality  
+- Full Docker implementation  
+- PDF / PDF-A email export to one or multiple employees via supervisor interface  
 
-- [] Mobile App (API) Entwicklung für iOS und Android
-     - [] Push Notifications (noch nicht eingestempelt oder Sollzeit überschritten (nicht ausgestempelt).
-     - [] Push Notifications (beim Ein und Ausstempeln).
-     - [] Geofencing (Ein und Ausstempeln nur innerhalb der Firma -/ Kann von Supervisoren aktiviert werden z. B. wenn ein Mitarbeiter kein Homeoffice hat).
+### 🔐 Security
+- Audit log system (tamper-proof with hash chain validation)  
+- Audit validation feature  
 
-- [] Urlaubsplaner
+### 📤 Export & Backup
+- Audit log export (CSV, JSON)  
+- `manage.sh` script for Docker management and backups  
+  - `backup.sh` for SQL backups (database + audit log)  
+  - Start / Restart / Stop scripts for container control  
 
-- [] Optimierung der Datenbankstruktur.
-- [] LDAP Funktionstest.
-- [] Benutzer können Bilder hinzufügen.
-- [] Language Fix - Variablen sind zum Teil noch nicht gesetzt.
-- [] Implementierung Bugtracker.
+### 🧪 Testing
+- Verified functionality in Docker and native environments  
 
-## Roadmap
+---
 
-- [] 2FA Unterstützung (Authenticator, Mail, oder Ähnliches).
+## ✅ [1.0.1]
 
-- [] Dienstplanung
-    - [] Supervisoren können vorgefertigten Dienstplan erstellen.
-    - [] Mitarbeiter können sich auf freie Schichten bewerben.
-    - [] Mitarbeiter können Schichten mit Begründung ablehnen (z. B. Arzttermin), der Supervisor kann die Schichten dann ändern.
-    - [] Mitarbeiter können sich vorab für Schichten als abwesend anmelden (z. B. Arzttermin).
-    - [] Automatische Dienstplan erstellung basierend auf Mitarbeiter Verfügbarkeit.
+### ✨ Features
+- Employees can change their passwords  
+- Admins can edit employee names  
+- Enforced password change on first login (optional)  
+- PDF/A export for long-term archiving  
 
-- [] Projektzeiterfassung
+### ⚙️ Improvements
+- Developer info section (To-Do + Changelog)  
+- Legal notice and privacy policy toggle in admin settings  
+- Database import/export moved to admin section  
+
+---
+
+## 🎉 [1.0.0] - Initial Release
+
+### ✨ Features
+- Initial public release  
+- Automatic break deduction  
+- PDF generation with color highlighting:
+  - Vacation  
+  - Public holidays  
+  - Sick leave  
+
+### 🐛 Fixes
+- Fixed Dark Mode loading and display issues  
+
+### 🎨 UI Improvements
+- Dashboard now shows:
+  - Used vacation days  
+  - Remaining vacation days  
+  - Sick days  
+- Employees are displayed by name  
+- Added label: **"Current working time:"**  
+- Dropdown menu integrated into employee name  
+
+---
+
+# 🚀 Planned Features
+
+## 💾 Backup Strategy
+- Automated backups (daily, weekly, monthly)  
+- Storage options:
+  - AWS S3  
+  - Google Cloud Storage  
+  - Azure Blob Storage  
+  - NAS  
+- Backup versioning  
+
+## 📱 Mobile App (iOS & Android API)
+- Push notifications:
+  - Not clocked in  
+  - Working time exceeded without clock-out  
+  - Clock-in / Clock-out events  
+- Geofencing (optional, configurable by supervisors)  
+
+## 📅 Core Features
+- Vacation planner  
+- Database structure optimization  
+- LDAP functionality testing  
+- User profile images  
+- Language fixes (missing variables)  
+- Bug tracker implementation  
+
+---
+
+# 🛣️ Roadmap
+
+## 🔐 Security
+- Two-factor authentication (2FA)  
+  - Authenticator apps  
+  - Email  
+
+## 📊 Shift Planning
+- Supervisors can create schedules  
+- Employees can apply for shifts  
+- Employees can decline shifts with a reason (e.g., doctor’s appointment)  
+- Employees can mark themselves as unavailable  
+- Automatic scheduling based on availability  
+
+## ⏱️ Time Tracking
+- Project-based time tracking  
+
+---
