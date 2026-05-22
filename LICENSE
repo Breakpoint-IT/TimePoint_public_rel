@@ -1,6 +1,11 @@
 MIT License
 
-Copyright (c) 2023 Patrick Meyhöfer
+Copyright (c) 2026 Marek Tonino
+
+This project is a fork of the original project (https://github.com/storminator89/Zeiterfassung
+) Copyright (c) 2023 Patrick Meyhöfer.
+The original project was no longer actively developed and was partially not fully functional.
+Modifications,maintenance, and further development are provided by Marek Tonino.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

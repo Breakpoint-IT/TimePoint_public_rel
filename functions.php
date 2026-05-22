@@ -24,15 +24,6 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// Establish a PDO connection
-try {
-    $conn = new PDO("sqlite:$database");
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    // Handle connection error
-    die("Verbindungsfehler: " . $e->getMessage());
-}
-
 // Fetch user's regular working hours and previous overtime
 try {
     $stmt = $conn->prepare('SELECT regelarbeitszeit, ueberstunden FROM users WHERE id = :user_id');
@@ -48,12 +39,13 @@ try {
 
 // Fetch all entries from 'zeiterfassung' for the current user, adding week number
 try {
-    $stmt = $conn->prepare('
-        SELECT *, strftime("%W", startzeit) as weekNumber 
+    $weekExpr = tpSqlWeek('startzeit');
+    $stmt = $conn->prepare("
+        SELECT *, {$weekExpr} AS week_number
         FROM zeiterfassung 
         WHERE user_id = :user_id
         ORDER BY startzeit DESC
-    ');
+    ");
     $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
     $stmt->execute();
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -87,15 +79,17 @@ $lastWorkingDayOfWeek = date('Y-m-d', strtotime('Friday this week'));
 
 // Calculate total worked minutes this week excluding breaks
 try {
-    $stmt = $conn->prepare('
+    $dateExpr = tpSqlDate('startzeit');
+    $durationExpr = tpSqlDurationMinutes('startzeit', 'endzeit');
+    $stmt = $conn->prepare("
         SELECT SUM(
-            ((strftime("%s", endzeit) - strftime("%s", startzeit)) / 60) - COALESCE(pause, 0)
+            ({$durationExpr}) - COALESCE(pause, 0)
         ) as totalMinutes
         FROM zeiterfassung
         WHERE user_id = :user_id
-        AND DATE(startzeit) BETWEEN :weekStart AND :weekEnd
-        AND TRIM(COALESCE(beschreibung, "")) NOT IN ("Feiertag", "Urlaub")
-    ');
+        AND {$dateExpr} BETWEEN :weekStart AND :weekEnd
+        AND TRIM(COALESCE(beschreibung, '')) NOT IN ('Feiertag', 'Urlaub')
+    ");
     $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
     $stmt->bindParam(':weekStart', $firstDayOfWeek, PDO::PARAM_STR);
     $stmt->bindParam(':weekEnd', $lastWorkingDayOfWeek, PDO::PARAM_STR);
@@ -127,19 +121,21 @@ $workingHoursThisMonth = max(0, $workingHoursThisMonth - (countUserBookedHoliday
 $currentDate = date("Y-m-d");
 
 // Adjusting SQL query to fetch data for the current calendar week
-$stmt = $conn->prepare('
+$dateExpr = tpSqlDate('startzeit');
+$durationExpr = tpSqlDurationMinutes('startzeit', 'endzeit');
+$stmt = $conn->prepare("
     SELECT
-        strftime("%Y-%m-%d", startzeit) AS tag,
-        SUM(((strftime("%s", endzeit) - strftime("%s", startzeit)) / 60.0) - COALESCE(pause, 0)) AS arbeitsstunden
+        {$dateExpr} AS tag,
+        SUM(({$durationExpr}) - COALESCE(pause, 0)) AS arbeitsstunden
     FROM
         zeiterfassung
     WHERE
         user_id = :user_id
-        AND DATE(startzeit) BETWEEN :weekStart AND :weekEnd
-        AND TRIM(COALESCE(beschreibung, "")) NOT IN ("Feiertag", "Urlaub")
+        AND {$dateExpr} BETWEEN :weekStart AND :weekEnd
+        AND TRIM(COALESCE(beschreibung, '')) NOT IN ('Feiertag', 'Urlaub')
     GROUP BY
-        strftime("%Y-%m-%d", startzeit)
-');
+        {$dateExpr}
+");
 $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
 $stmt->bindParam(':weekStart', $firstDayOfWeek, PDO::PARAM_STR);
 $stmt->bindParam(':weekEnd', $lastWorkingDayOfWeek, PDO::PARAM_STR);
@@ -201,13 +197,14 @@ function countUserBookedHolidays($startDate, $endDate, $userId)
 {
     global $conn;
 
-    $stmt = $conn->prepare('
-        SELECT DISTINCT DATE(startzeit) AS datum
+    $dateExpr = tpSqlDate('startzeit');
+    $stmt = $conn->prepare("
+        SELECT DISTINCT {$dateExpr} AS datum
         FROM zeiterfassung
         WHERE user_id = :user_id
-        AND DATE(startzeit) BETWEEN :startDate AND :endDate
-        AND TRIM(COALESCE(beschreibung, "")) IN ("Feiertag", "Urlaub")
-    ');
+        AND {$dateExpr} BETWEEN :startDate AND :endDate
+        AND TRIM(COALESCE(beschreibung, '')) IN ('Feiertag', 'Urlaub')
+    ");
     $stmt->execute([
         ':user_id' => $userId,
         ':startDate' => $startDate,
@@ -229,7 +226,8 @@ function countUserBookedHolidays($startDate, $endDate, $userId)
 function fetchFeiertageDB($jahr)
 {
     global $conn;
-    $stmt = $conn->prepare("SELECT EXISTS(SELECT 1 FROM Feiertage WHERE strftime('%Y', Datum) = ?)");
+    $yearExpr = tpSqlYear('Datum');
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM Feiertage WHERE {$yearExpr} = ?");
     $stmt->execute([$jahr]);
     $exists = $stmt->fetchColumn();
     if ($exists) {
@@ -286,10 +284,10 @@ function fetchFeiertageDieseWoche($currentYear, $currentWeekNumber)
     global $conn;
 
     $stmt = $conn->prepare("
-        SELECT DATE(datum) AS datum, name
+        SELECT " . tpSqlDate('datum') . " AS datum, name
         FROM Feiertage
-        WHERE strftime('%Y', datum) = :jahr
-        AND strftime('%W', datum) = :weekNumber
+        WHERE " . tpSqlYear('datum') . " = :jahr
+        AND " . tpSqlWeek('datum') . " = :weekNumber
     ");
     $stmt->bindParam(':jahr', $currentYear);
     $stmt->bindParam(':weekNumber', $currentWeekNumber);
@@ -350,30 +348,25 @@ foreach ($workHoursByDate as $datum => $hours) {
 $totalOverHours += $previousOvertime;
 
 // Berechnung der Gesamtüberstunden in Stunden und Minuten
-if ($totalOverHours < 0) {
-    // Negative Gesamtüberstunden, verwenden Absolutwerte für Stunden und Minuten
-    $totalOverHoursHours = floor(abs($totalOverHours)); // Absolutwert für Stunden, abgerundet auf die nächste niedrigere ganze Zahl
-    $totalOverHoursMinutes = round((abs($totalOverHours) - $totalOverHoursHours) * 60); // Differenz zu ganzen Stunden, umgewandelt in Minuten
-    $totalOverHoursFormatted = sprintf("-%02d:%02d", $totalOverHoursHours, $totalOverHoursMinutes);
-} else {
-    // Positive Gesamtüberstunden
-    $totalOverHoursHours = floor($totalOverHours); // Ganze Stunden
-    $totalOverHoursMinutes = round(($totalOverHours - $totalOverHoursHours) * 60); // Umwandlung der restlichen Dezimalstunden in Minuten
-    $totalOverHoursFormatted = sprintf("%02d:%02d", $totalOverHoursHours, $totalOverHoursMinutes);
-}
+$totalOverMinutesRounded = (int)round($totalOverHours * 60);
+$isTotalOverHoursNegative = $totalOverMinutesRounded < 0;
+$totalOverHoursHours = intdiv(abs($totalOverMinutesRounded), 60);
+$totalOverHoursMinutes = abs($totalOverMinutesRounded) % 60;
+$totalOverHoursFormatted = ($isTotalOverHoursNegative ? '-' : '') . sprintf("%02d:%02d", $totalOverHoursHours, $totalOverHoursMinutes);
 
 // SQL query for total working hours this month
-$stmt = $conn->prepare('
+$durationExpr = tpSqlDurationMinutes('startzeit', 'endzeit');
+$stmt = $conn->prepare("
     SELECT
-        SUM(((strftime("%s", endzeit) - strftime("%s", startzeit)) / 60) - COALESCE(pause, 0)) as totalMinutes
+        SUM(({$durationExpr}) - COALESCE(pause, 0)) as totalMinutes
     FROM
         zeiterfassung
     WHERE
         user_id = :user_id
-        AND strftime("%Y", startzeit) = :currentYear
-        AND strftime("%m", startzeit) = :currentMonth
-        AND TRIM(COALESCE(beschreibung, "")) NOT IN ("Feiertag", "Urlaub")
-');
+        AND " . tpSqlYear('startzeit') . " = :currentYear
+        AND " . tpSqlMonth('startzeit') . " = :currentMonth
+        AND TRIM(COALESCE(beschreibung, '')) NOT IN ('Feiertag', 'Urlaub')
+");
 $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
 $stmt->bindParam(':currentYear', $currentYear, PDO::PARAM_STR);
 $stmt->bindParam(':currentMonth', $currentMonth, PDO::PARAM_STR);
@@ -386,16 +379,17 @@ $totalHoursThisMonthFromRecords = $totalMinutesThisMonthFromRecords / 60;
 $overHoursThisMonth = $totalHoursThisMonthFromRecords - $workingHoursThisMonth;
 
 // Total working hours of the year
-$stmt = $conn->prepare('
+$durationExpr = tpSqlDurationMinutes('startzeit', 'endzeit');
+$stmt = $conn->prepare("
     SELECT
-        SUM(((strftime("%s", endzeit) - strftime("%s", startzeit)) / 60) - COALESCE(pause, 0)) as totalMinutes
+        SUM(({$durationExpr}) - COALESCE(pause, 0)) as totalMinutes
     FROM
         zeiterfassung
     WHERE
         user_id = :user_id
-        AND strftime("%Y", startzeit) = :currentYear
-        AND TRIM(COALESCE(beschreibung, "")) NOT IN ("Feiertag", "Urlaub")
-');
+        AND " . tpSqlYear('startzeit') . " = :currentYear
+        AND TRIM(COALESCE(beschreibung, '')) NOT IN ('Feiertag', 'Urlaub')
+");
 $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
 $stmt->bindParam(':currentYear', $currentYear, PDO::PARAM_STR);
 $stmt->execute();
@@ -413,15 +407,11 @@ $workingHoursThisYear = max(0, $workingHoursThisYear - (countUserBookedHolidays(
 $overHoursThisYear = $totalHoursThisYearFromRecords - $workingHoursThisYear;
 $totalOverHours = $overHoursThisYear + $previousOvertime;
 
-if ($totalOverHours < 0) {
-    $totalOverHoursHours = floor(abs($totalOverHours));
-    $totalOverHoursMinutes = round((abs($totalOverHours) - $totalOverHoursHours) * 60);
-    $totalOverHoursFormatted = sprintf("-%02d:%02d", $totalOverHoursHours, $totalOverHoursMinutes);
-} else {
-    $totalOverHoursHours = floor($totalOverHours);
-    $totalOverHoursMinutes = round(($totalOverHours - $totalOverHoursHours) * 60);
-    $totalOverHoursFormatted = sprintf("%02d:%02d", $totalOverHoursHours, $totalOverHoursMinutes);
-}
+$totalOverMinutesRounded = (int)round($totalOverHours * 60);
+$isTotalOverHoursNegative = $totalOverMinutesRounded < 0;
+$totalOverHoursHours = intdiv(abs($totalOverMinutesRounded), 60);
+$totalOverHoursMinutes = abs($totalOverMinutesRounded) % 60;
+$totalOverHoursFormatted = ($isTotalOverHoursNegative ? '-' : '') . sprintf("%02d:%02d", $totalOverHoursHours, $totalOverHoursMinutes);
 
 $expectedHoursThisWeek = 5 * $userRegularWorkingHours; // 5 Arbeitstage pro Woche
 
@@ -443,7 +433,7 @@ function getFeiertageForYear($jahr)
 {
     global $conn;
 
-    $stmt = $conn->prepare("SELECT DATE(datum) AS datum, name FROM Feiertage WHERE strftime('%Y', datum) = ?");
+    $stmt = $conn->prepare("SELECT " . tpSqlDate('datum') . " AS datum, name FROM Feiertage WHERE " . tpSqlYear('datum') . " = ?");
     $stmt->execute([$jahr]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -475,11 +465,11 @@ function getEntryById($conn, $id)
 }
 
 // Gamification: Counting the different weeks worked
-$stmt = $conn->prepare("SELECT COUNT(DISTINCT strftime('%W', startzeit)) as weeksCount FROM zeiterfassung WHERE user_id = :user_id");
+$stmt = $conn->prepare("SELECT COUNT(DISTINCT " . tpSqlWeek('startzeit') . ") AS weeks_count FROM zeiterfassung WHERE user_id = :user_id");
 $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
 $stmt->execute();
 $result = $stmt->fetch(PDO::FETCH_ASSOC);
-$isFirstWeek = $result['weeksCount'] == 1;
+$isFirstWeek = (int)($result['weeks_count'] ?? 0) == 1;
 
 $events = [];
 
@@ -533,10 +523,10 @@ function calculateDuration($startzeit, $endzeit, $pause) {
     $diff = ($end->getTimestamp() - $start->getTimestamp()) / 60;
     
     // Subtract pause
-    $totalMinutes = $diff - intval($pause);
-    
+    $totalMinutes = (int)round($diff - intval($pause));
+
     // Calculate hours and minutes
-    $hours = floor($totalMinutes / 60);
+    $hours = intdiv($totalMinutes, 60);
     $minutes = $totalMinutes % 60;
 
     return sprintf("%02d:%02d", $hours, $minutes);

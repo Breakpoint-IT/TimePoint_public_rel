@@ -31,16 +31,16 @@ $stmt->execute([$user_id, date('Y-m-d', strtotime('-1 month'))]);
 $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Gamification data
-$stmt = $conn->prepare("SELECT COUNT(DISTINCT strftime('%W', startzeit)) as weeksCount FROM zeiterfassung WHERE user_id = :user_id");
+$stmt = $conn->prepare("SELECT COUNT(DISTINCT " . tpSqlWeek('startzeit') . ") AS weeks_count FROM zeiterfassung WHERE user_id = :user_id");
 $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
 $stmt->execute();
 $result = $stmt->fetch(PDO::FETCH_ASSOC);
-$weeksCount = $result['weeksCount'];
+$weeksCount = (int)($result['weeks_count'] ?? 0);
 $isFirstWeek = $weeksCount == 1;
 
 // Fetch the number of worked days this month
 $stmt = $conn->prepare("
-    SELECT COUNT(DISTINCT DATE(startzeit)) as workedDays 
+    SELECT COUNT(DISTINCT " . tpSqlDate('startzeit') . ") AS worked_days
     FROM zeiterfassung 
     WHERE user_id = :user_id 
     AND startzeit >= :month_start 
@@ -52,13 +52,13 @@ $stmt->bindValue(':month_start', date('Y-m-01 00:00:00'), PDO::PARAM_STR);
 $stmt->bindValue(':month_end', date('Y-m-d 23:59:59', strtotime('last day of this month')), PDO::PARAM_STR);
 $stmt->execute();
 $result = $stmt->fetch(PDO::FETCH_ASSOC);
-$workedDays = $result['workedDays'];
+$workedDays = (int)($result['worked_days'] ?? 0);
 
 $stmt = $conn->prepare("
-    SELECT TRIM(COALESCE(beschreibung, '')) AS type, COUNT(DISTINCT DATE(startzeit)) AS days
+    SELECT TRIM(COALESCE(beschreibung, '')) AS type, COUNT(DISTINCT " . tpSqlDate('startzeit') . ") AS days
     FROM zeiterfassung
     WHERE user_id = :user_id
-    AND strftime('%Y', startzeit) = :currentYear
+    AND " . tpSqlYear('startzeit') . " = :currentYear
     AND TRIM(COALESCE(beschreibung, '')) IN ('Urlaub', 'Krank')
     GROUP BY TRIM(COALESCE(beschreibung, ''))
 ");
@@ -93,10 +93,10 @@ $theme_mode = $_SESSION['theme_mode'] ?? 'light';
 // Function to format hours as HH:MM
 function formatHoursAsHHMM($hours)
 {
-    $isNegative = $hours < 0;
-    $hours = abs($hours);
-    $h = floor($hours);
-    $m = round(($hours - $h) * 60);
+    $totalMinutes = (int)round($hours * 60);
+    $isNegative = $totalMinutes < 0;
+    $h = intdiv(abs($totalMinutes), 60);
+    $m = abs($totalMinutes) % 60;
     return ($isNegative ? '-' : '') . sprintf("%02d:%02d", $h, $m);
 }
 
@@ -228,25 +228,25 @@ function calculateRemainingHours($workedHours, $expectedHours)
                     <div class="stat-figure opacity-70">
                         <i class="fas fa-umbrella-beach fa-3x"></i>
                     </div>
-                    <div class="stat-title text-lg font-semibold opacity-80">Genommener Urlaub</div>
+                    <div class="stat-title text-lg font-semibold opacity-80"><?= DASHBOARD_VACATION_TAKEN ?></div>
                     <div class="stat-value"><?= $vacationDaysTaken ?></div>
-                    <div class="stat-desc text-sm font-medium opacity-80">von <?= $vacationDaysPerYear ?> Tagen</div>
+                    <div class="stat-desc text-sm font-medium opacity-80"><?= sprintf(COMMON_OF_DAYS, $vacationDaysPerYear) ?></div>
                 </div>
                 <div class="stat bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-box shadow-lg">
                     <div class="stat-figure opacity-70">
                         <i class="fas fa-calendar-check fa-3x"></i>
                     </div>
-                    <div class="stat-title text-lg font-semibold opacity-80">Resturlaub</div>
+                    <div class="stat-title text-lg font-semibold opacity-80"><?= DASHBOARD_VACATION_REMAINING ?></div>
                     <div class="stat-value"><?= $vacationDaysRemaining ?></div>
-                    <div class="stat-desc text-sm font-medium opacity-80">Tage im aktuellen Jahr</div>
+                    <div class="stat-desc text-sm font-medium opacity-80"><?= COMMON_DAYS_CURRENT_YEAR ?></div>
                 </div>
                 <div class="stat bg-gradient-to-br from-rose-500 to-rose-600 rounded-box shadow-lg">
                     <div class="stat-figure opacity-70">
                         <i class="fas fa-notes-medical fa-3x"></i>
                     </div>
-                    <div class="stat-title text-lg font-semibold opacity-80">Krankheitstage</div>
+                    <div class="stat-title text-lg font-semibold opacity-80"><?= DASHBOARD_SICK_DAYS ?></div>
                     <div class="stat-value"><?= $sickDaysTaken ?></div>
-                    <div class="stat-desc text-sm font-medium opacity-80">Tage im aktuellen Jahr</div>
+                    <div class="stat-desc text-sm font-medium opacity-80"><?= COMMON_DAYS_CURRENT_YEAR ?></div>
                 </div>
             </div>
         </div>

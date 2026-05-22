@@ -26,6 +26,11 @@ $error = '';
 $successMessage = '';
 $smtpSettings = getSmtpSettings();
 
+function optionalIntOrNull($value)
+{
+    return $value === '' || $value === null ? null : (int)$value;
+}
+
 function encryptData($data, $key, $method)
 {
     $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length($method));
@@ -57,6 +62,8 @@ $pauseSettings = $stmt->fetchAll(PDO::FETCH_OBJ);
 
 $showPrivacyLink = getAppSetting('show_privacy_link', '1') === '1';
 $showImprintLink = getAppSetting('show_imprint_link', '1') === '1';
+$imprintContent = getLegalPageContent('imprint');
+$privacyContent = getLegalPageContent('privacy');
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_smtp_settings'])) {
     try {
@@ -71,9 +78,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_smtp_settings']
             'from_name' => $_POST['smtp_from_name'] ?? '',
         ]);
         $smtpSettings = getSmtpSettings();
-        $successMessage = "SMTP-Einstellungen wurden gespeichert.";
+        $successMessage = ADMIN_SMTP_SAVED;
     } catch (Throwable $e) {
-        $error = "Fehler beim Speichern der SMTP-Einstellungen: " . $e->getMessage();
+        $error = ADMIN_SMTP_SAVE_ERROR . $e->getMessage();
     }
 }
 
@@ -81,15 +88,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['send_smtp_test'])) {
     $testRecipient = trim((string)($_POST['smtp_test_recipient'] ?? ''));
 
     if (!filter_var($testRecipient, FILTER_VALIDATE_EMAIL)) {
-        $error = "Bitte eine gueltige Test-E-Mail-Adresse eintragen.";
+        $error = ADMIN_SMTP_TEST_INVALID_EMAIL;
     } else {
         try {
             sendTimePointMail(
                 $testRecipient,
                 'TimePoint Test',
                 'TimePoint SMTP Test',
-                '<p>Diese Testmail wurde erfolgreich ueber die TimePoint SMTP-Konfiguration versendet.</p>',
-                "Diese Testmail wurde erfolgreich ueber die TimePoint SMTP-Konfiguration versendet."
+                '<p>Diese Testmail wurde erfolgreich über die TimePoint SMTP-Konfiguration versendet.</p>',
+                "Diese Testmail wurde erfolgreich über die TimePoint SMTP-Konfiguration versendet."
             );
             $successMessage = "SMTP-Testmail wurde versendet.";
         } catch (Throwable $e) {
@@ -107,7 +114,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_legal_visibilit
         setAppSetting('show_imprint_link', $showImprintLink ? '1' : '0');
         $successMessage = "Anzeige der rechtlichen Seiten wurde aktualisiert.";
     } catch (PDOException $e) {
-        $error = "Fehler beim Speichern der Anzeigeeinstellungen: " . $e->getMessage();
+        $error = ADMIN_LEGAL_VISIBILITY_ERROR . $e->getMessage();
+    }
+}
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_legal_content'])) {
+    try {
+        setLegalPageContent('imprint', (string)($_POST['imprint_content'] ?? ''));
+        setLegalPageContent('privacy', (string)($_POST['privacy_content'] ?? ''));
+        $imprintContent = getLegalPageContent('imprint');
+        $privacyContent = getLegalPageContent('privacy');
+        $successMessage = "Inhalte der rechtlichen Seiten wurden gespeichert.";
+    } catch (Throwable $e) {
+        $error = ADMIN_LEGAL_CONTENT_ERROR . $e->getMessage();
     }
 }
 
@@ -129,7 +148,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_pause_settings'
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
     } catch (PDOException $e) {
-        $error = "Fehler beim Aktualisieren der Pauseneinstellungen: " . $e->getMessage();
+        $error = ADMIN_PAUSE_SETTINGS_ERROR . $e->getMessage();
     }
 }
 
@@ -154,28 +173,32 @@ function generateJWT($header, $payload, $secret)
 // Token erzeugen und anzeigen
 $token = '';
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_token'])) {
-    $header = [
-        'alg' => 'HS256',
-        'typ' => 'JWT'
-    ];
+    if (tpIsDemoAdminUserId($_SESSION['user_id'])) {
+        $error = tpDemoModeMessage();
+    } else {
+        $header = [
+            'alg' => 'HS256',
+            'typ' => 'JWT'
+        ];
 
-    $payload = [
-        'iss' => "localhost",
-        'aud' => "localhost",
-        'iat' => time(),
-        'exp' => time() + (365 * 24 * 60 * 60), // 1 Jahr Ablaufzeit
-        'user_id' => $_SESSION['user_id']
-    ];
+        $payload = [
+            'iss' => "localhost",
+            'aud' => "localhost",
+            'iat' => time(),
+            'exp' => time() + (365 * 24 * 60 * 60), // 1 Jahr Ablaufzeit
+            'user_id' => $_SESSION['user_id']
+        ];
 
-    $secret = 'your_secret_key';
-    $token = generateJWT($header, $payload, $secret);
+        $secret = 'your_secret_key';
+        $token = generateJWT($header, $payload, $secret);
 
-    try {
-        $stmt = $conn->prepare("UPDATE users SET token = ? WHERE id = ?");
-        $stmt->execute([$token, $_SESSION['user_id']]);
-        $successMessage = TOKEN_GENERATED_SUCCESS;
-    } catch (PDOException $e) {
-        $error = TOKEN_GENERATED_ERROR . $e->getMessage();
+        try {
+            $stmt = $conn->prepare("UPDATE users SET token = ? WHERE id = ?");
+            $stmt->execute([$token, $_SESSION['user_id']]);
+            $successMessage = TOKEN_GENERATED_SUCCESS;
+        } catch (PDOException $e) {
+            $error = TOKEN_GENERATED_ERROR . $e->getMessage();
+        }
     }
 }
 
@@ -369,8 +392,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_user'])) {
     $password = $_POST['password'];
     $email = $_POST['email'];
     $role = $_POST['role'];
-    $department_id = $_POST['department'];
-    $supervisor = $_POST['supervisor'];
+    $department_id = optionalIntOrNull($_POST['department'] ?? null);
+    $supervisor = optionalIntOrNull($_POST['supervisor'] ?? null);
     $regelarbeitszeit = $_POST['regelarbeitszeit'];
     $ueberstunden = $_POST['ueberstunden'];
     $forcePasswordChange = isset($_POST['force_password_change']) ? 1 : 0;
@@ -398,12 +421,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_user'])) {
     $user_id = $_POST['user_id'];
 
     try {
+        if (tpIsDemoAdminUserId($user_id)) {
+            throw new RuntimeException(tpDemoModeMessage());
+        }
+
         // Statement vorbereiten und ausführen, um den Benutzer zu löschen
         $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
         $stmt->execute([$user_id]);
 
         $successMessage = USER_DELETED_SUCCESS;
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         $error = USER_DELETED_ERROR . $e->getMessage();
     }
 }
@@ -415,12 +442,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_user'])) {
     $email = $_POST['email'];
     $role = $_POST['role'];
     $password = $_POST['password'];
-    $department_id = $_POST['department'];
-    $supervisor = $_POST['supervisor'];
+    $department_id = optionalIntOrNull($_POST['department'] ?? null);
+    $supervisor = optionalIntOrNull($_POST['supervisor'] ?? null);
     $regelarbeitszeit = $_POST['regelarbeitszeit'];
     $ueberstunden = $_POST['ueberstunden'];
 
     try {
+        if (tpIsDemoAdminUserId($user_id)) {
+            throw new RuntimeException(tpDemoModeMessage());
+        }
+
         if (!empty($password)) {
             $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $conn->prepare("UPDATE users SET username = ?, email = ?, role = ?, password = ?, department_id = ?, supervisor_id = ?, regelarbeitszeit = ?, ueberstunden = ? WHERE id = ?");
@@ -431,7 +462,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_user'])) {
         }
 
         $successMessage = USER_UPDATED_SUCCESS;
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         $error = USER_UPDATED_ERROR . $e->getMessage();
     }
 }
@@ -468,7 +499,7 @@ $stmt = $conn->prepare("
     LEFT JOIN users as supervisors ON users.supervisor_id = supervisors.id
     WHERE users.username LIKE :search OR users.email LIKE :search
     ORDER BY users.username
-    LIMIT :offset, :perPage
+    LIMIT :perPage OFFSET :offset
 ");
 
 $searchParam = "%$search%";
@@ -595,7 +626,7 @@ include 'header.php';
                             <div class="form-control">
                                 <label class="label cursor-pointer justify-start gap-3" for="force_password_change">
                                     <input type="checkbox" id="force_password_change" name="force_password_change" class="checkbox checkbox-primary">
-                                    <span class="label-text">Passwortänderung beim ersten Login erzwingen</span>
+                                    <span class="label-text whitespace-normal leading-snug"><?= FORM_FORCE_PASSWORD_CHANGE ?></span>
                                 </label>
                             </div>
                             <button type="submit" class="btn btn-primary">
@@ -633,6 +664,7 @@ include 'header.php';
                             </thead>
                             <tbody>
                                 <?php foreach ($users as $user): ?>
+                                    <?php $isDemoAdmin = tpIsDemoAdminUserId($user->id); ?>
                                     <tr>
                                         <td><?= htmlspecialchars($user->username) ?></td>
                                         <td><?= htmlspecialchars($user->email) ?></td>
@@ -642,13 +674,13 @@ include 'header.php';
                                         <td><?= htmlspecialchars($user->regelarbeitszeit) ?></td>
                                         <td><?= htmlspecialchars($user->ueberstunden) ?></td>
                                         <td>
-                                            <button class="btn btn-ghost btn-sm" onclick="editUser(<?= $user->id ?>)" title="<?= BUTTON_EDIT ?>">
+                                            <button class="btn btn-ghost btn-sm" onclick="editUser(<?= $user->id ?>)" title="<?= $isDemoAdmin ? htmlspecialchars(tpDemoModeMessage()) : BUTTON_EDIT ?>" <?= $isDemoAdmin ? 'disabled' : '' ?>>
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             <form method="post" class="inline" onsubmit="return confirm('<?= CONFIRM_DELETE_USER ?>')">
                                                 <input type="hidden" name="delete_user" value="1">
                                                 <input type="hidden" name="user_id" value="<?= $user->id ?>">
-                                                <button type="submit" class="btn btn-ghost btn-sm" title="<?= BUTTON_DELETE ?>">
+                                                <button type="submit" class="btn btn-ghost btn-sm" title="<?= $isDemoAdmin ? htmlspecialchars(tpDemoModeMessage()) : BUTTON_DELETE ?>" <?= $isDemoAdmin ? 'disabled' : '' ?>>
                                                     <i class="fas fa-trash-alt"></i>
                                                 </button>
                                             </form>
@@ -762,74 +794,74 @@ include 'header.php';
             <div id="smtp-settings" class="card bg-base-100 shadow-xl mb-8">
                 <div class="card-body">
                     <h2 class="card-title text-2xl mb-4">
-                        <i class="fas fa-envelope mr-2"></i>SMTP-E-Mail
+                        <i class="fas fa-envelope mr-2"></i><?= ADMIN_SMTP_TITLE ?>
                     </h2>
                     <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="hidden" name="update_smtp_settings" value="1">
                         <div class="form-control md:col-span-2">
                             <label class="label cursor-pointer justify-start gap-3" for="smtp_enabled">
                                 <input type="checkbox" id="smtp_enabled" name="smtp_enabled" class="toggle toggle-primary" <?= (int)$smtpSettings['enabled'] === 1 ? 'checked' : '' ?>>
-                                <span class="label-text">SMTP-Versand aktivieren</span>
+                                <span class="label-text"><?= ADMIN_SMTP_ENABLED ?></span>
                             </label>
                         </div>
                         <div class="form-control">
                             <label class="label" for="smtp_host">
-                                <span class="label-text">SMTP-Server</span>
+                                <span class="label-text"><?= ADMIN_SMTP_HOST ?></span>
                             </label>
                             <input type="text" id="smtp_host" name="smtp_host" class="input input-bordered" value="<?= htmlspecialchars($smtpSettings['host']) ?>" placeholder="smtp.office365.com" required>
                         </div>
                         <div class="form-control">
                             <label class="label" for="smtp_port">
-                                <span class="label-text">Port</span>
+                                <span class="label-text"><?= ADMIN_SMTP_PORT ?></span>
                             </label>
                             <input type="number" id="smtp_port" name="smtp_port" class="input input-bordered" value="<?= htmlspecialchars((string)$smtpSettings['port']) ?>" required>
                         </div>
                         <div class="form-control">
                             <label class="label" for="smtp_encryption">
-                                <span class="label-text">Verschluesselung</span>
+                                <span class="label-text"><?= ADMIN_SMTP_ENCRYPTION ?></span>
                             </label>
                             <select id="smtp_encryption" name="smtp_encryption" class="select select-bordered">
                                 <option value="starttls" <?= $smtpSettings['encryption'] === 'starttls' || $smtpSettings['encryption'] === 'tls' ? 'selected' : '' ?>>STARTTLS</option>
                                 <option value="ssl" <?= $smtpSettings['encryption'] === 'ssl' ? 'selected' : '' ?>>SSL/TLS</option>
-                                <option value="none" <?= $smtpSettings['encryption'] === 'none' ? 'selected' : '' ?>>Keine</option>
+                                <option value="none" <?= $smtpSettings['encryption'] === 'none' ? 'selected' : '' ?>><?= ADMIN_SMTP_ENCRYPTION_NONE ?></option>
                             </select>
                         </div>
                         <div class="form-control">
                             <label class="label" for="smtp_username">
-                                <span class="label-text">Benutzername</span>
+                                <span class="label-text"><?= FORM_USERNAME ?></span>
                             </label>
                             <input type="text" id="smtp_username" name="smtp_username" class="input input-bordered" value="<?= htmlspecialchars($smtpSettings['username']) ?>" placeholder="absender@domain.de">
                         </div>
                         <div class="form-control">
                             <label class="label" for="smtp_password">
-                                <span class="label-text">Passwort</span>
+                                <span class="label-text"><?= FORM_PASSWORD ?></span>
                             </label>
-                            <input type="password" id="smtp_password" name="smtp_password" class="input input-bordered" placeholder="Leer lassen, um das gespeicherte Passwort zu behalten">
+                            <input type="password" id="smtp_password" name="smtp_password" class="input input-bordered" placeholder="<?= ADMIN_SMTP_PASSWORD_PLACEHOLDER ?>">
                         </div>
                         <div class="form-control">
                             <label class="label" for="smtp_from_email">
-                                <span class="label-text">Absender-E-Mail</span>
+                                <span class="label-text"><?= ADMIN_SMTP_FROM_EMAIL ?></span>
                             </label>
                             <input type="email" id="smtp_from_email" name="smtp_from_email" class="input input-bordered" value="<?= htmlspecialchars($smtpSettings['from_email']) ?>" placeholder="absender@domain.de" required>
                         </div>
                         <div class="form-control">
                             <label class="label" for="smtp_from_name">
-                                <span class="label-text">Absendername</span>
+                                <span class="label-text"><?= ADMIN_SMTP_FROM_NAME ?></span>
                             </label>
                             <input type="text" id="smtp_from_name" name="smtp_from_name" class="input input-bordered" value="<?= htmlspecialchars($smtpSettings['from_name']) ?>" placeholder="TimePoint">
                         </div>
                         <div class="md:col-span-2">
                             <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save mr-2"></i>SMTP speichern
+                                <i class="fas fa-save mr-2"></i><?= ADMIN_SMTP_SAVE ?>
                             </button>
                         </div>
                     </form>
                     <div class="divider"></div>
                     <form method="post" class="flex flex-col md:flex-row gap-3">
                         <input type="hidden" name="send_smtp_test" value="1">
-                        <input type="email" name="smtp_test_recipient" class="input input-bordered flex-1" placeholder="Test-E-Mail-Adresse" required>
+                        <input type="email" name="smtp_test_recipient" class="input input-bordered flex-1" placeholder="<?= ADMIN_SMTP_TEST_PLACEHOLDER ?>" required>
                         <button type="submit" class="btn btn-secondary">
-                            <i class="fas fa-paper-plane mr-2"></i>Testmail senden
+                            <i class="fas fa-paper-plane mr-2"></i><?= ADMIN_SMTP_TEST_SEND ?>
                         </button>
                     </form>
                 </div>
@@ -881,27 +913,64 @@ include 'header.php';
             <div id="legal-pages" class="card bg-base-100 shadow-xl mb-8">
                 <div class="card-body">
                     <h2 class="card-title text-2xl mb-4">
-                        <i class="fas fa-scale-balanced mr-2"></i>Rechtliche Seiten
+                        <i class="fas fa-scale-balanced mr-2"></i><?= ADMIN_LEGAL_TITLE ?>
                     </h2>
                     <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="hidden" name="update_legal_visibility" value="1">
                         <div class="form-control">
                             <label class="label cursor-pointer justify-start gap-3" for="show_privacy_link">
                                 <input type="checkbox" id="show_privacy_link" name="show_privacy_link" class="toggle toggle-primary" <?= $showPrivacyLink ? 'checked' : '' ?>>
-                                <span class="label-text"><i class="fa-solid fa-shield-halved mr-2"></i>Datenschutz anzeigen</span>
+                                <span class="label-text"><i class="fa-solid fa-shield-halved mr-2"></i><?= ADMIN_SHOW_PRIVACY ?></span>
                             </label>
                         </div>
                         <div class="form-control">
                             <label class="label cursor-pointer justify-start gap-3" for="show_imprint_link">
                                 <input type="checkbox" id="show_imprint_link" name="show_imprint_link" class="toggle toggle-primary" <?= $showImprintLink ? 'checked' : '' ?>>
-                                <span class="label-text"><i class="fa-solid fa-gavel mr-2"></i>Impressum anzeigen</span>
+                                <span class="label-text"><i class="fa-solid fa-gavel mr-2"></i><?= ADMIN_SHOW_IMPRINT ?></span>
                             </label>
                         </div>
                         <div class="md:col-span-2">
                             <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save mr-2"></i>Anzeige speichern
+                                <i class="fas fa-save mr-2"></i><?= ADMIN_SAVE_VISIBILITY ?>
                             </button>
                         </div>
+                    </form>
+                    <div class="divider"></div>
+                    <form method="post" class="space-y-4">
+                        <input type="hidden" name="update_legal_content" value="1">
+                        <div class="tabs tabs-boxed">
+                            <button type="button" class="tab tab-active" data-legal-tab="imprint"><?= NAV_IMPRINT ?></button>
+                            <button type="button" class="tab" data-legal-tab="privacy"><?= NAV_PRIVACY ?></button>
+                        </div>
+                        <div data-legal-panel="imprint">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+                                <label class="label p-0" for="imprint_content">
+                                    <span class="label-text font-semibold"><?= ADMIN_IMPRINT_CONTENT ?></span>
+                                </label>
+                                <a href="imprint.php" target="_blank" class="btn btn-ghost btn-sm">
+                                    <i class="fas fa-arrow-up-right-from-square mr-2"></i><?= COMMON_PREVIEW ?>
+                                </a>
+                            </div>
+                            <textarea id="imprint_content" name="imprint_content" class="textarea textarea-bordered font-mono min-h-[22rem] w-full" spellcheck="false"><?= htmlspecialchars($imprintContent, ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div data-legal-panel="privacy" class="hidden">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+                                <label class="label p-0" for="privacy_content">
+                                    <span class="label-text font-semibold"><?= ADMIN_PRIVACY_CONTENT ?></span>
+                                </label>
+                                <a href="privacy.php" target="_blank" class="btn btn-ghost btn-sm">
+                                    <i class="fas fa-arrow-up-right-from-square mr-2"></i><?= COMMON_PREVIEW ?>
+                                </a>
+                            </div>
+                            <textarea id="privacy_content" name="privacy_content" class="textarea textarea-bordered font-mono min-h-[22rem] w-full" spellcheck="false"><?= htmlspecialchars($privacyContent, ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="fas fa-circle-info"></i>
+                            <span><?= ADMIN_LEGAL_HTML_NOTICE ?></span>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save mr-2"></i><?= ADMIN_SAVE_CONTENT ?>
+                        </button>
                     </form>
                 </div>
             </div>
@@ -910,31 +979,31 @@ include 'header.php';
             <div id="database-operations" class="card bg-base-100 shadow-xl mb-8">
                 <div class="card-body">
                     <h2 class="card-title text-2xl mb-4">
-                        <i class="fas fa-database mr-2"></i>Datenbankoperationen
+                        <i class="fas fa-database mr-2"></i><?= ADMIN_DATABASE_OPERATIONS ?>
                     </h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        <div class="stat bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-box shadow-lg text-white">
+                            <div class="stat-figure opacity-70">
+                                <i class="fas fa-database fa-3x"></i>
+                            </div>
+                            <div class="stat-title text-lg font-semibold opacity-80 text-white"><?= ADMIN_ACTIVE_DATABASE ?></div>
+                            <div class="stat-value text-3xl"><?= TIMEPOINT_DB_DRIVER === 'pgsql' ? 'PostgreSQL' : 'MariaDB' ?></div>
+                        </div>
                         <div class="card bg-base-200 shadow-md">
                             <div class="card-body">
-                                <h3 class="card-title"><i class="fas fa-upload mr-2"></i><?= SETTINGS_IMPORT_DATABASE ?></h3>
-                                <form method="post" enctype="multipart/form-data" action="import.php" class="space-y-4">
-                                    <div class="form-control">
-                                        <label class="label" for="dbFile">
-                                            <span class="label-text"><?= SETTINGS_IMPORT_DATABASE ?></span>
-                                        </label>
-                                        <input type="file" id="dbFile" name="dbFile" class="file-input file-input-bordered w-full" accept=".sqlite">
-                                    </div>
-                                    <button type="submit" class="btn btn-primary w-full">
-                                        <i class="fas fa-upload mr-2"></i><?= BUTTON_IMPORT ?>
-                                    </button>
-                                </form>
+                                <h3 class="card-title"><i class="fas fa-file-export mr-2"></i><?= ADMIN_DATABASE_EXPORT ?></h3>
+                                <p class="mb-4"><?= ADMIN_DATABASE_EXPORT_TEXT ?></p>
+                                <a href="database_export.php" class="btn btn-primary w-full">
+                                    <i class="fas fa-download mr-2"></i><?= ADMIN_EXPORT_DATABASE ?>
+                                </a>
                             </div>
                         </div>
                         <div class="card bg-base-200 shadow-md">
                             <div class="card-body">
-                                <h3 class="card-title"><i class="fas fa-download mr-2"></i><?= SETTINGS_DOWNLOAD_DATABASE ?></h3>
-                                <p class="mb-4">Laden Sie eine Kopie der aktuellen Datenbank herunter.</p>
-                                <a href="download.php" class="btn btn-primary w-full">
-                                    <i class="fas fa-download mr-2"></i><?= DOWNLOAD_DATABASE ?>
+                                <h3 class="card-title"><i class="fas fa-file-import mr-2"></i><?= ADMIN_SQLITE_MIGRATION ?></h3>
+                                <p class="mb-4"><?= ADMIN_SQLITE_MIGRATION_TEXT ?></p>
+                                <a href="import.php" class="btn btn-primary w-full">
+                                    <i class="fas fa-upload mr-2"></i><?= ADMIN_OPEN_MIGRATION ?>
                                 </a>
                             </div>
                         </div>
@@ -971,10 +1040,10 @@ include 'header.php';
                 <li><a href="#user-management"><i class="fas fa-users mr-2"></i><?= USER_MANAGEMENT_TITLE ?></a></li>
                 <li><a href="#department-management"><i class="fas fa-building mr-2"></i><?= DEPARTMENT_MANAGEMENT_TITLE ?></a></li>
                 <li><a href="#ldap-sync"><i class="fas fa-sync mr-2"></i><?= LDAP_SYNC_TITLE ?></a></li>
-                <li><a href="#smtp-settings"><i class="fas fa-envelope mr-2"></i>SMTP-E-Mail</a></li>
+                <li><a href="#smtp-settings"><i class="fas fa-envelope mr-2"></i><?= ADMIN_SMTP_TITLE ?></a></li>
                 <li><a href="#pause-settings"><i class="fas fa-coffee mr-2"></i><?= PAUSE_SETTINGS_TITLE ?></a></li>
-                <li><a href="#legal-pages"><i class="fas fa-scale-balanced mr-2"></i>Rechtliche Seiten</a></li>
-                <li><a href="#database-operations"><i class="fas fa-database mr-2"></i>Datenbankoperationen</a></li>
+                <li><a href="#legal-pages"><i class="fas fa-scale-balanced mr-2"></i><?= ADMIN_LEGAL_TITLE ?></a></li>
+                <li><a href="#database-operations"><i class="fas fa-database mr-2"></i><?= ADMIN_DATABASE_OPERATIONS ?></a></li>
                 <li><a href="#api-access"><i class="fas fa-key mr-2"></i><?= API_ACCESS_TITLE ?></a></li>
             </ul>
         </div>
@@ -1087,6 +1156,8 @@ include 'header.php';
         const pauseSettingsTable = document.getElementById('pauseSettingsTable');
         const userSearch = document.getElementById('userSearch');
         const departmentSearch = document.getElementById('departmentSearch');
+        const legalTabs = document.querySelectorAll('[data-legal-tab]');
+        const legalPanels = document.querySelectorAll('[data-legal-panel]');
 
         toggleUserForm.addEventListener('click', () => {
             userForm.classList.toggle('hidden');
@@ -1116,6 +1187,17 @@ include 'header.php';
                 const row = e.target.closest('tr');
                 row.parentNode.removeChild(row);
             }
+        });
+
+        legalTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const activeTab = tab.dataset.legalTab;
+
+                legalTabs.forEach(item => item.classList.toggle('tab-active', item === tab));
+                legalPanels.forEach(panel => {
+                    panel.classList.toggle('hidden', panel.dataset.legalPanel !== activeTab);
+                });
+            });
         });
 
         // Suchfunktion für Abteilungen

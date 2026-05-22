@@ -8,7 +8,7 @@ try {
     $stmt->execute();
     $userRegularWorkingHours = $stmt->fetchColumn() ?? 8; // Default to 8 hours if not set
 } catch (PDOException $e) {
-    die("Datenbankfehler: " . $e->getMessage());
+    die(ERROR_DATABASE . $e->getMessage());
 }
 
 // Check if there's an active session (Kommen without Gehen)
@@ -73,16 +73,16 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                                 <div id="mobileTimer" class="text-center text-2xl font-bold mb-2 <?php echo $activeSession ? '' : 'hidden'; ?>">00:00:00</div>
                                 <div class="flex justify-center space-x-4">
                                     <button id="mobileStartButton" class="btn btn-primary">
-                                        <i class="fas fa-sign-in-alt mr-2"></i>Kommen
+                                        <i class="fas fa-sign-in-alt mr-2"></i><?= FORM_COME ?>
                                     </button>
                                     <button id="mobileEndButton" class="btn btn-secondary" style="display: none;">
-                                        <i class="fas fa-sign-out-alt mr-2"></i>Gehen
+                                        <i class="fas fa-sign-out-alt mr-2"></i><?= FORM_GO ?>
                                     </button>
                                 </div>
                             </div>
 
                             <p class="text-lg mb-6">
-                                Willkommen zurück! Klicken Sie auf "Kommen" zum Starten oder buchen Sie hier spezielle Ereignisse.
+                                <?= INDEX_WELCOME_TEXT ?>
                             </p>
 
                             <form id="mainForm" method="POST" action="save.php" class="space-y-6">
@@ -91,7 +91,7 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                                 <input type="datetime-local" id="endzeit" name="endzeit" class="hidden">
 
                                 <div>
-                                    <h2 class="text-lg font-semibold mb-3">Ereignistyp</h2>
+                                    <h2 class="text-lg font-semibold mb-3"><?= FORM_EVENT_TYPE ?></h2>
                                     <div class="grid event-type-grid gap-3">
                                         <label class="flex items-center justify-start p-3 border rounded transition-all hover:bg-base-200 cursor-pointer">
                                             <input type="radio" id="urlaub" name="ereignistyp" value="Urlaub" class="radio radio-primary mr-3">
@@ -113,24 +113,24 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
 
                                 <div class="event-selection-fields">
                                     <!-- Event selection elements -->
-                                    <label for="standort">Standort:</label>
+                                    <label for="standort"><?= FORM_LOCATION ?>:</label>
                                     <select name="standort" id="standort" required data-id="<?= htmlspecialchars($record['id']) ?>">
-                                        <option value="">Wählen Sie einen Standort</option>
-                                        <option value="Home">Home</option>
-                                        <option value="Büro">Büro</option>
+                                        <option value=""><?= INDEX_SELECT_LOCATION ?></option>
+                                        <option value="<?= LOCATION_HOME_OFFICE_VALUE ?>"><?= LOCATION_HOME_OFFICE ?></option>
+                                        <option value="<?= LOCATION_OFFICE_VALUE ?>"><?= LOCATION_OFFICE ?></option>
                                         <!-- Weitere Optionen -->
                                     </select>
 
-                                    <label for="beschreibung">Kommentar:</label>
-                                    <textarea name="beschreibung" id="beschreibung" rows="3" placeholder="Geben Sie einen Kommentar ein..." data-id="<?= htmlspecialchars($record['id']) ?>"></textarea>
+                                    <label for="beschreibung"><?= FORM_COMMENT ?>:</label>
+                                    <textarea name="beschreibung" id="beschreibung" rows="3" placeholder="<?= INDEX_COMMENT_PLACEHOLDER ?>" data-id="<?= htmlspecialchars($record['id']) ?>"></textarea>
 
-                                    <button type="submit">Speichern</button>
+                                    <button type="submit"><?= COMMON_SAVE ?></button>
                                 </div>
 
                                 <div>
-                                    <h2 class="text-lg font-semibold mb-3">Datumsbereich</h2>
+                                    <h2 class="text-lg font-semibold mb-3"><?= INDEX_DATE_RANGE ?></h2>
                                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-                                        <input type="text" id="dateRange" name="dateRange" class="input input-bordered flex-grow" placeholder="Datumsbereich auswählen" readonly>
+                                        <input type="text" id="dateRange" name="dateRange" class="input input-bordered flex-grow" placeholder="<?= INDEX_DATE_RANGE_PLACEHOLDER ?>" readonly>
                                         <button type="button" id="datenEintragenButton" class="btn btn-primary whitespace-nowrap">
                                             <?= BUTTON_SUBMIT_DATA ?>
                                         </button>
@@ -276,6 +276,22 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
     </div>
 
     <script>
+        const i18n = {
+            error: <?= json_encode(ERROR_MODAL_TITLE) ?>,
+            genericError: <?= json_encode(ERROR_GENERIC) ?>,
+            updateTimeRecordsError: <?= json_encode(ERROR_UPDATE_TIME_RECORDS) ?>,
+            deleteEntryTitle: <?= json_encode(CONFIRM_DELETE_ENTRY_TITLE) ?>,
+            deleteEntryText: <?= json_encode(CONFIRM_DELETE_ENTRY_TEXT) ?>,
+            deleteEntryButton: <?= json_encode(CONFIRM_DELETE_ENTRY_BUTTON) ?>,
+            cancel: <?= json_encode(BUTTON_CANCEL) ?>,
+            deleted: <?= json_encode(ENTRY_DELETED_TITLE) ?>,
+            deletedSuccess: <?= json_encode(ENTRY_DELETED_SUCCESS) ?>,
+            deleteError: <?= json_encode(ERROR_DELETE_ENTRY) ?>,
+            selectEventType: <?= json_encode(VALIDATION_SELECT_EVENT_TYPE) ?>,
+            selectDateRange: <?= json_encode(VALIDATION_SELECT_DATE_RANGE) ?>,
+            selectValidDateRange: <?= json_encode(VALIDATION_SELECT_VALID_DATE_RANGE) ?>
+        };
+
         let startButton = document.getElementById('startButton');
         let endButton = document.getElementById('endButton');
         let mobileStartButton = document.getElementById('mobileStartButton');
@@ -385,17 +401,17 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                             });
                         });
                     } else {
-                        throw new Error(jsonResponse.message || 'Ein Fehler ist aufgetreten');
+                        throw new Error(jsonResponse.message || i18n.genericError);
                     }
                 } catch (e) {
-                    throw new Error(data || 'Ein Fehler ist aufgetreten');
+                    throw new Error(data || i18n.genericError);
                 }
             })
             .catch((error) => {
                 console.error('Error:', error);
                 Swal.fire({
                     icon: 'error',
-                    title: 'Fehler',
+                    title: i18n.error,
                     text: error.message,
                     confirmButtonText: 'OK'
                 });
@@ -435,8 +451,8 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                     console.error('Error:', error);
                     Swal.fire({
                         icon: 'error',
-                        title: 'Fehler',
-                        text: 'Fehler beim Aktualisieren der Zeiteinträge',
+                        title: i18n.error,
+                        text: i18n.updateTimeRecordsError,
                         confirmButtonText: 'OK'
                     });
                 });
@@ -478,7 +494,7 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                     .then(response => response.json())
                     .then(data => {
                         if (!data.success) {
-                            throw new Error(data.message || 'Ein Fehler ist aufgetreten');
+                            throw new Error(data.message || i18n.genericError);
                         }
 
                         this.reset();
@@ -497,7 +513,7 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                     .catch(error => {
                         Swal.fire({
                             icon: 'error',
-                            title: 'Fehler',
+                            title: i18n.error,
                             text: error.message,
                             confirmButtonText: 'OK'
                         });
@@ -510,14 +526,14 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                 button.addEventListener('click', function() {
                     const id = this.dataset.id;
                     Swal.fire({
-                        title: 'Sind Sie sicher?',
-                        text: "Dieser Eintrag wird unwiderruflich gelöscht!",
+                        title: i18n.deleteEntryTitle,
+                        text: i18n.deleteEntryText,
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonColor: '#3085d6',
                         cancelButtonColor: '#d33',
-                        confirmButtonText: 'Ja, löschen!',
-                        cancelButtonText: 'Abbrechen'
+                        confirmButtonText: i18n.deleteEntryButton,
+                        cancelButtonText: i18n.cancel
                     }).then((result) => {
                         if (result.isConfirmed) {
                             fetch('save.php', {
@@ -532,8 +548,8 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                                 if (data === "Successfully deleted") {
                                     Swal.fire({
                                         icon: 'success',
-                                        title: 'Gelöscht!',
-                                        text: 'Der Eintrag wurde erfolgreich gelöscht.',
+                                        title: i18n.deleted,
+                                        text: i18n.deletedSuccess,
                                         showConfirmButton: false,
                                         timer: 1500
                                     });
@@ -542,7 +558,7 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                                 } else {
                                     Swal.fire({
                                         icon: 'error',
-                                        title: 'Fehler',
+                                        title: i18n.error,
                                         text: data
                                     });
                                 }
@@ -551,8 +567,8 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                                 console.error('Error:', error);
                                 Swal.fire({
                                     icon: 'error',
-                                    title: 'Fehler',
-                                    text: 'Fehler beim Löschen des Eintrags'
+                                    title: i18n.error,
+                                    text: i18n.deleteError
                                 });
                             });
                         }
@@ -642,7 +658,7 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
             var ereignistyp = document.querySelector('input[name="ereignistyp"]:checked');
 
             if (!ereignistyp) {
-                alert('Bitte wählen Sie einen Ereignistyp aus.');
+                alert(i18n.selectEventType);
                 return;
             }
 
@@ -674,10 +690,10 @@ $latestRecord = $stmt->fetch(PDO::FETCH_ASSOC);
                             alert('Error submitting special days');
                         });
                 } else {
-                    alert('Bitte wählen Sie einen gültigen Datumsbereich aus.');
+                    alert(i18n.selectValidDateRange);
                 }
             } else {
-                alert('Bitte wählen Sie einen Datumsbereich aus.');
+                alert(i18n.selectDateRange);
             }
         });
 

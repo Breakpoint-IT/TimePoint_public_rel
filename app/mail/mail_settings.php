@@ -23,6 +23,16 @@ function getSmtpSettings(): array
     ];
 
     $settings = array_merge($defaults, $settings);
+    $settings['enabled'] = !empty($settings['enabled']) ? 1 : 0;
+    $settings['host'] = trim((string)($settings['host'] ?? '')) !== '' ? trim((string)$settings['host']) : $defaults['host'];
+    $settings['port'] = max(1, (int)($settings['port'] ?: $defaults['port']));
+    $settings['encryption'] = in_array(($settings['encryption'] ?? ''), ['none', 'starttls', 'tls', 'ssl'], true)
+        ? (string)$settings['encryption']
+        : $defaults['encryption'];
+    $settings['username'] = (string)($settings['username'] ?? '');
+    $settings['password'] = (string)($settings['password'] ?? '');
+    $settings['from_email'] = (string)($settings['from_email'] ?? '');
+    $settings['from_name'] = trim((string)($settings['from_name'] ?? '')) !== '' ? trim((string)$settings['from_name']) : $defaults['from_name'];
     $settings['password_plain'] = tpDecrypt($settings['password'] ?? '');
 
     return $settings;
@@ -36,20 +46,37 @@ function saveSmtpSettings(array $data): void
     $password = trim((string)($data['password'] ?? ''));
     $encryptedPassword = $password !== '' ? tpEncrypt($password) : ($current['password'] ?? '');
 
-    $stmt = $conn->prepare("
-        INSERT INTO smtp_settings (id, enabled, host, port, encryption, username, password, from_email, from_name, updated_at)
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(id) DO UPDATE SET
-            enabled = excluded.enabled,
-            host = excluded.host,
-            port = excluded.port,
-            encryption = excluded.encryption,
-            username = excluded.username,
-            password = excluded.password,
-            from_email = excluded.from_email,
-            from_name = excluded.from_name,
-            updated_at = excluded.updated_at
-    ");
+    if (TIMEPOINT_DB_DRIVER === 'pgsql') {
+        $stmt = $conn->prepare("
+            INSERT INTO smtp_settings (id, enabled, host, port, encryption, username, password, from_email, from_name, updated_at)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, " . tpSqlNow() . ")
+            ON CONFLICT(id) DO UPDATE SET
+                enabled = excluded.enabled,
+                host = excluded.host,
+                port = excluded.port,
+                encryption = excluded.encryption,
+                username = excluded.username,
+                password = excluded.password,
+                from_email = excluded.from_email,
+                from_name = excluded.from_name,
+                updated_at = excluded.updated_at
+        ");
+    } else {
+        $stmt = $conn->prepare("
+            INSERT INTO smtp_settings (id, enabled, host, port, encryption, username, password, from_email, from_name, updated_at)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, " . tpSqlNow() . ")
+            ON DUPLICATE KEY UPDATE
+                enabled = VALUES(enabled),
+                host = VALUES(host),
+                port = VALUES(port),
+                encryption = VALUES(encryption),
+                username = VALUES(username),
+                password = VALUES(password),
+                from_email = VALUES(from_email),
+                from_name = VALUES(from_name),
+                updated_at = VALUES(updated_at)
+        ");
+    }
 
     $stmt->execute([
         !empty($data['enabled']) ? 1 : 0,
@@ -82,7 +109,7 @@ function createPasswordResetToken(int $userId): array
     $tokenHash = hash('sha256', $token);
     $expiresAt = (new DateTimeImmutable('+1 hour'))->format('Y-m-d H:i:s');
 
-    $stmt = $conn->prepare("UPDATE password_resets SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL");
+    $stmt = $conn->prepare("UPDATE password_resets SET used_at = " . tpSqlNow() . " WHERE user_id = ? AND used_at IS NULL");
     $stmt->execute([$userId]);
 
     $stmt = $conn->prepare("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)");
@@ -108,7 +135,7 @@ function findPasswordResetToken(string $token): ?object
         INNER JOIN users ON users.id = password_resets.user_id
         WHERE password_resets.token_hash = ?
           AND password_resets.used_at IS NULL
-          AND password_resets.expires_at >= datetime('now')
+          AND password_resets.expires_at >= " . tpSqlNow() . "
         LIMIT 1
     ");
     $stmt->execute([hash('sha256', $token)]);
@@ -121,7 +148,7 @@ function markPasswordResetTokenUsed(int $resetId): void
 {
     global $conn;
 
-    $stmt = $conn->prepare("UPDATE password_resets SET used_at = datetime('now') WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE password_resets SET used_at = " . tpSqlNow() . " WHERE id = ?");
     $stmt->execute([$resetId]);
 }
 

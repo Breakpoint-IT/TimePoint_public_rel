@@ -24,14 +24,17 @@ $offset = ($page - 1) * $itemsPerPage;
 // Modify the query to order by date and time
 $stmt = $conn->prepare("
     SELECT *, 
-           strftime('%W', startzeit) AS weekNumber,
-           DATE(startzeit) as workDate
+           " . tpSqlWeek('startzeit') . " AS week_number,
+           " . tpSqlDate('startzeit') . " AS work_date
     FROM zeiterfassung 
     WHERE user_id = ? 
     ORDER BY startzeit DESC 
     LIMIT ? OFFSET ?
 ");
-$stmt->execute([$user_id, $itemsPerPage, $offset]);
+$stmt->bindValue(1, $user_id, PDO::PARAM_INT);
+$stmt->bindValue(2, $itemsPerPage, PDO::PARAM_INT);
+$stmt->bindValue(3, $offset, PDO::PARAM_INT);
+$stmt->execute();
 $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Group records by date for summary calculation
@@ -65,19 +68,19 @@ echo '<div class="flex justify-between items-center mb-4">
 
 echo '<form class="manual-time-record-form mb-4 grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
     <div class="form-control">
-        <label class="label py-1"><span class="label-text">Start</span></label>
+        <label class="label py-1"><span class="label-text">' . FORM_START . '</span></label>
         <input type="datetime-local" name="startzeit" class="input input-bordered input-sm" required>
     </div>
     <div class="form-control">
-        <label class="label py-1"><span class="label-text">Ende</span></label>
+        <label class="label py-1"><span class="label-text">' . FORM_END . '</span></label>
         <input type="datetime-local" name="endzeit" class="input input-bordered input-sm" required>
     </div>
     <div class="form-control">
-        <label class="label py-1"><span class="label-text">Pause (Minuten)</span></label>
+        <label class="label py-1"><span class="label-text">' . FORM_BREAK_MINUTES . '</span></label>
         <input type="number" name="manual_pause" min="0" step="1" value="0" class="input input-bordered input-sm">
     </div>
     <div class="form-control">
-        <label class="label py-1"><span class="label-text">Standort</span></label>
+        <label class="label py-1"><span class="label-text">' . FORM_LOCATION . '</span></label>
         <select name="standort" class="select select-bordered select-sm">
             <option value="' . LOCATION_OFFICE_VALUE . '">' . LOCATION_OFFICE . '</option>
             <option value="' . LOCATION_HOME_OFFICE_VALUE . '">' . LOCATION_HOME_OFFICE . '</option>
@@ -85,12 +88,12 @@ echo '<form class="manual-time-record-form mb-4 grid grid-cols-1 md:grid-cols-6 
         </select>
     </div>
     <div class="form-control">
-        <label class="label py-1"><span class="label-text">Kommentar</span></label>
+        <label class="label py-1"><span class="label-text">' . FORM_COMMENT . '</span></label>
         <input type="text" name="beschreibung" class="input input-bordered input-sm">
     </div>
     <button type="submit" class="btn btn-primary btn-sm">
         <i class="fas fa-plus"></i>
-        Nachtragen
+        ' . COMMON_ADD_LATER . '
     </button>
 </form>';
 
@@ -118,7 +121,7 @@ $dailyTotals = [];
 
 // Group records by date first
 foreach ($records as $record) {
-    $workDate = $record['workDate'];
+    $workDate = $record['work_date'];
     if (!isset($dailyRecords[$workDate])) {
         $dailyRecords[$workDate] = [];
         $dailyTotals[$workDate] = [
@@ -162,7 +165,8 @@ foreach ($dailyRecords as $workDate => $dayRecords) {
     $totalMinutes -= $totalPause;
     
     // Format total time
-    $totalHours = floor($totalMinutes / 60);
+    $totalMinutes = (int)round($totalMinutes);
+    $totalHours = intdiv($totalMinutes, 60);
     $remainingMinutes = $totalMinutes % 60;
     $formattedTotal = sprintf("%02d:%02d", $totalHours, $remainingMinutes);
     
@@ -178,7 +182,7 @@ foreach ($dailyRecords as $workDate => $dayRecords) {
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="font-medium">' . $formattedDate . '</div>
-                        <div class="badge badge-sm badge-ghost" title="Anzahl der Einträge">
+                        <div class="badge badge-sm badge-ghost" title="' . COMMON_ENTRY_COUNT . '">
                             ' . count($dayRecords) . '
                         </div>
                     </div>
@@ -283,7 +287,7 @@ function outputTableHeaders() {
 function outputRecordRow($record) {
     echo '<tr>
             <td class="hidden">' . $record['id'] . '</td>
-            <td>' . $record['weekNumber'] . '</td>
+            <td>' . $record['week_number'] . '</td>
             <td>
                 <div class="flex items-center gap-2">
                     <span class="text-gray-600 editable-datetime" 

@@ -2,23 +2,16 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TIMESTAMP="$(date +"%Y-%m-%d_%H-%M-%S")"
-BACKUP_DIR="$PROJECT_ROOT/backups/$TIMESTAMP"
-CONTAINER_NAME="timepoint"
-DB_PATH_IN_CONTAINER="/var/www/html/assets/db/timetracking.sqlite"
-DB_BACKUP_PATH="$BACKUP_DIR/timetracking.sqlite"
+CONFIG_FILE="$PROJECT_ROOT/config.local.php"
 
-mkdir -p "$BACKUP_DIR"
-
-echo "Erstelle Backup in: $BACKUP_DIR"
-
-docker cp "$CONTAINER_NAME:$DB_PATH_IN_CONTAINER" "$DB_BACKUP_PATH"
-
-if command -v sqlite3 >/dev/null 2>&1; then
-  sqlite3 "$DB_BACKUP_PATH" ".output $BACKUP_DIR/audit_log.sql" ".dump audit_log"
-  echo "Audit-SQL-Export gespeichert: $BACKUP_DIR/audit_log.sql"
-else
-  echo "sqlite3 ist lokal nicht installiert. Audit-SQL-Export wurde uebersprungen."
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  echo "Keine config.local.php gefunden. Bitte TimePoint zuerst im Browser einrichten."
+  exit 1
 fi
 
-echo "Backup abgeschlossen."
+echo "TimePoint verwendet jetzt PostgreSQL oder MariaDB."
+echo "Bitte Backups mit dem passenden Datenbankwerkzeug erstellen:"
+echo "- PostgreSQL: pg_dump"
+echo "- MariaDB: mariadb-dump oder mysqldump"
+echo
+echo "Die Zugangsdaten stehen lokal in: $CONFIG_FILE"

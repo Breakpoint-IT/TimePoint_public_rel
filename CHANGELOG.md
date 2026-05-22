@@ -1,127 +1,81 @@
-# 📌 TimePoint Changelog
+# TimePoint Changelog
 
-All notable changes to this project will be documented in this file.  
-This project follows a structured versioning approach.
+## Release 1.0.4 - In Progress
 
----
+- [ ] Weekly, Monthly, Quarterly, Yearly calendar views inside the dashboard.
+- [ ] Browser extension bug fixes and first public release.
+- [ ] Mobile app API development for iOS and Android.
+  - [ ] Push notifications when a user has not clocked in or has exceeded the target working time without clocking out.
+  - [ ] Push notifications when clocking in and out.
+  - [ ] Geofencing: clocking in and out only within the company area. Supervisors can enable this, for example when an employee does not have a home-office agreement.
 
-## 🚧 [1.0.3] - In Progress
+## Release 1.0.3
 
-### ✨ Improvements
-- Browser extension bug fixes and preparation for first public release  
-- Legal notice (Imprint) and privacy policy can now be edited directly in the browser  
+- [x] Demo Mode implemented.
+- [x] Language fixes: some variables are not defined yet.
+- [x] Database optimization: SQLite was removed. PostgreSQL and MariaDB are now the supported database options.
+- [x] Admin migration from SQLite to the new databases.
+- [x] Database setup via `setup.php` and integration of the former registration flow.
+- [x] Imprint and privacy policy pages can now be edited directly in the browser.
+- [x] Structural improvements.
+  - [x] Folder structure adjusted and optimized.
+  - [x] Old files removed.
 
-### 🏗️ Structural Changes
-- Folder structure optimization and cleanup  
-- Removed legacy files  
+## Release 1.0.2
 
----
+- [x] SMTP implementation in the settings.
+- [x] Password reset feature.
+- [x] Complete Docker implementation.
+- [x] PDF and PDF/A email delivery to one or more employees from the supervisor export view.
+- [x] Audit log: tracks who changed what and prevents later manipulation without a log entry, including hash-chain verification.
+- [x] Audit verification implemented.
+- [x] Audit log export feature: CSV and JSON.
+- [x] `manage.sh` script for Docker container management and backup functions for the database and audit log.
+  - [x] `backup.sh` script for creating SQL backups of the database and audit log.
+  - [x] Start, restart, and stop scripts for simple Docker container management.
+- [x] Functional verification with Docker and native environments.
 
-## ✅ [1.0.2]
+## Release 1.0.1
 
-### ✨ Features
-- SMTP configuration added to settings  
-- "Forgot Password" functionality  
-- Full Docker implementation  
-- PDF / PDF-A email export to one or multiple employees via supervisor interface  
+- [x] Employees can change their password.
+- [x] Administrators can change employee names.
+- [x] Administrators can require new employees to change their password on first login.
+- [x] PDF/A export for long-term archiving added.
+- [x] Developer information with to-dos and changelog information.
+- [x] Imprint and privacy policy links can now be shown or hidden separately in the admin settings.
+- [x] Database export and import moved from settings to the admin area.
 
-### 🔐 Security
-- Audit log system (tamper-proof with hash chain validation)  
-- Audit validation feature  
+## Release 1.0.0
 
-### 📤 Export & Backup
-- Audit log export (CSV, JSON)  
-- `manage.sh` script for Docker management and backups  
-  - `backup.sh` for SQL backups (database + audit log)  
-  - Start / Restart / Stop scripts for container control  
+- [x] First public release.
+- [x] Numerous bug fixes, improvements, and core revisions.
+- [x] Automatic break deduction.
+- [x] PDF generation with color highlighting for vacation, holidays, and sick leave.
+- [x] Dark mode loading and display issues fixed.
+- [x] UI improvements.
+  - [x] Dashboard now shows used vacation, remaining vacation, and sick days.
+  - [x] Each employee is now addressed by name.
+  - [x] The timer now shows the label "Current working time:" before the clocked time.
+  - [x] Dropdown menu integrated into the employee name.
 
-### 🧪 Testing
-- Verified functionality in Docker and native environments  
+## Planned Features
 
----
+- [ ] Backup strategy.
+  - [ ] Automatic backup job: daily, weekly, monthly.
+  - [ ] Backup storage locations: cloud storage such as AWS S3, Google Cloud Storage, Azure Blob Storage, or NAS.
+  - [ ] Backup versioning.
+- [ ] Vacation planner.
+- [ ] LDAP function test.
+- [ ] Bug tracker implementation.
 
-## ✅ [1.0.1]
+## Roadmap
 
-### ✨ Features
-- Employees can change their passwords  
-- Admins can edit employee names  
-- Enforced password change on first login (optional)  
-- PDF/A export for long-term archiving  
-
-### ⚙️ Improvements
-- Developer info section (To-Do + Changelog)  
-- Legal notice and privacy policy toggle in admin settings  
-- Database import/export moved to admin section  
-
----
-
-## 🎉 [1.0.0] - Initial Release
-
-### ✨ Features
-- Initial public release  
-- Automatic break deduction  
-- PDF generation with color highlighting:
-  - Vacation  
-  - Public holidays  
-  - Sick leave  
-
-### 🐛 Fixes
-- Fixed Dark Mode loading and display issues  
-
-### 🎨 UI Improvements
-- Dashboard now shows:
-  - Used vacation days  
-  - Remaining vacation days  
-  - Sick days  
-- Employees are displayed by name  
-- Added label: **"Current working time:"**  
-- Dropdown menu integrated into employee name  
-
----
-
-# 🚀 Planned Features
-
-## 💾 Backup Strategy
-- Automated backups (daily, weekly, monthly)  
-- Storage options:
-  - AWS S3  
-  - Google Cloud Storage  
-  - Azure Blob Storage  
-  - NAS  
-- Backup versioning  
-
-## 📱 Mobile App (iOS & Android API)
-- Push notifications:
-  - Not clocked in  
-  - Working time exceeded without clock-out  
-  - Clock-in / Clock-out events  
-- Geofencing (optional, configurable by supervisors)  
-
-## 📅 Core Features
-- Vacation planner  
-- Database structure optimization  
-- LDAP functionality testing  
-- User profile images  
-- Language fixes (missing variables)  
-- Bug tracker implementation  
-
----
-
-# 🛣️ Roadmap
-
-## 🔐 Security
-- Two-factor authentication (2FA)  
-  - Authenticator apps  
-  - Email  
-
-## 📊 Shift Planning
-- Supervisors can create schedules  
-- Employees can apply for shifts  
-- Employees can decline shifts with a reason (e.g., doctor’s appointment)  
-- Employees can mark themselves as unavailable  
-- Automatic scheduling based on availability  
-
-## ⏱️ Time Tracking
-- Project-based time tracking  
-
----
+- [ ] 2FA support: authenticator app, email, or similar.
+- [ ] Shift planning.
+  - [ ] Supervisors can create predefined shift schedules.
+  - [ ] Employees can apply for open shifts.
+  - [ ] Employees can decline shifts with a reason, for example a doctor's appointment, and supervisors can adjust the schedule.
+  - [ ] Employees can mark themselves unavailable for shifts in advance, for example because of a doctor's appointment.
+  - [ ] Automatic shift schedule creation based on employee availability.
+- [ ] Project time tracking.
+- [ ] Users can add images.

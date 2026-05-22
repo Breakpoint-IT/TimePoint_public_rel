@@ -13,6 +13,7 @@ $user_role = $_SESSION['role'] ?? null;
 $error = '';
 $successMessage = '';
 $showSuccessModal = false;
+$supportedLanguages = ['de', 'en'];
 
 // Sprachdateien laden
 $lang = $_SESSION['lang'] ?? 'de';
@@ -31,19 +32,24 @@ $userInfo['automatic_pause_deduction'] = $userInfo['automatic_pause_deduction'] 
 $userInfo['pause_duration'] = $userInfo['pause_duration'] ?? 30;
 $userInfo['vacation_days_per_year'] = $userInfo['vacation_days_per_year'] ?? 30;
 $userInfo['force_password_change'] = $userInfo['force_password_change'] ?? 0;
+$isProtectedDemoAdmin = tpIsDemoAdminUserId($user_id);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $demoAttemptedProtectedChange = false;
+
     if (($_POST['action'] ?? '') === 'change_password') {
         $currentPassword = $_POST['current_password'] ?? '';
         $newPassword = $_POST['new_password'] ?? '';
         $confirmPassword = $_POST['confirm_password'] ?? '';
 
-        if (!password_verify($currentPassword, $userInfo['password'])) {
-            $error = 'Das aktuelle Passwort ist nicht korrekt.';
+        if ($isProtectedDemoAdmin) {
+            $error = tpDemoModeMessage();
+        } elseif (!password_verify($currentPassword, $userInfo['password'])) {
+            $error = PASSWORD_CURRENT_INVALID;
         } elseif (strlen($newPassword) < 8) {
-            $error = 'Das neue Passwort muss mindestens 8 Zeichen lang sein.';
+            $error = PASSWORD_MIN_LENGTH_ERROR;
         } elseif ($newPassword !== $confirmPassword) {
-            $error = 'Die neuen Passwörter stimmen nicht überein.';
+            $error = PASSWORD_CONFIRM_MISMATCH;
         } else {
             $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
             $stmt = $conn->prepare("UPDATE users SET password = ?, force_password_change = 0 WHERE id = ?");
@@ -51,26 +57,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $userInfo['password'] = $hashedPassword;
             $userInfo['force_password_change'] = 0;
             $_SESSION['force_password_change'] = 0;
-            $successMessage = 'Passwort erfolgreich geändert!';
+            $successMessage = PASSWORD_UPDATED_SUCCESS;
             $showSuccessModal = true;
         }
-    } elseif (isset($_POST['lang'])) {
-        $lang = $_POST['lang'];
-        $_SESSION['lang'] = $lang;
-        // Lade die neue Sprachdatei sofort
-        $langFile = "languages/$lang.php";
-        if (file_exists($langFile)) {
-            require_once $langFile;
-        }
     }
-    if (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['regelarbeitszeit'])) {
+    if (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['regelarbeitszeit']) && !$isProtectedDemoAdmin) {
         $regelarbeitszeit = floatval($_POST['regelarbeitszeit']);
         $updateSql = "UPDATE users SET regelarbeitszeit = :regelarbeitszeit WHERE id = :id";
         $stmt = $conn->prepare($updateSql);
         $stmt->execute([':regelarbeitszeit' => $regelarbeitszeit, ':id' => $user_id]);
         $userInfo['regelarbeitszeit'] = $regelarbeitszeit;
+    } elseif (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['regelarbeitszeit'])) {
+        $demoAttemptedProtectedChange = true;
     }
-    if (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['pause_settings_submitted'])) {
+    if (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['pause_settings_submitted']) && !$isProtectedDemoAdmin) {
         $automaticPauseDeduction = isset($_POST['automatic_pause_deduction']) ? 1 : 0;
         $pauseDuration = max(0, (int)($_POST['pause_duration'] ?? 0));
         $vacationDaysPerYear = max(0, (int)($_POST['vacation_days_per_year'] ?? 0));
@@ -85,21 +85,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userInfo['automatic_pause_deduction'] = $automaticPauseDeduction;
         $userInfo['pause_duration'] = $pauseDuration;
         $userInfo['vacation_days_per_year'] = $vacationDaysPerYear;
+    } elseif (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['pause_settings_submitted'])) {
+        $demoAttemptedProtectedChange = true;
     }
-    if (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['ueberstunden']) && $user_role === 'admin') {
+    if (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['ueberstunden']) && $user_role === 'admin' && !$isProtectedDemoAdmin) {
         $ueberstunden = floatval($_POST['ueberstunden']);
         $updateSql = "UPDATE users SET ueberstunden = :ueberstunden WHERE id = :id";
         $stmt = $conn->prepare($updateSql);
         $stmt->execute([':ueberstunden' => $ueberstunden, ':id' => $user_id]);
         $userInfo['ueberstunden'] = $ueberstunden;
+    } elseif (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['ueberstunden']) && $user_role === 'admin') {
+        $demoAttemptedProtectedChange = true;
     }
     if (($_POST['action'] ?? '') !== 'change_password' && isset($_POST['theme_mode'])) {
-        $theme_mode = $_POST['theme_mode'];
+        $theme_mode = in_array($_POST['theme_mode'], ['light', 'dark', 'system'], true) ? $_POST['theme_mode'] : 'light';
         $_SESSION['theme_mode'] = $theme_mode;
     }
     if (($_POST['action'] ?? '') !== 'change_password') {
-        $successMessage = 'Einstellungen erfolgreich aktualisiert!';
-        $showSuccessModal = true;
+        if (isset($_POST['lang'])) {
+            $requestedLang = in_array($_POST['lang'], $supportedLanguages, true) ? $_POST['lang'] : 'de';
+            if ($requestedLang !== ($_SESSION['lang'] ?? 'de')) {
+                $_SESSION['lang'] = $requestedLang;
+                setcookie('lang', $requestedLang, time() + 31536000, '/', '', false, true);
+                header('Location: settings.php');
+                exit();
+            }
+        }
+        if ($demoAttemptedProtectedChange) {
+            $error = tpDemoModeMessage();
+        } else {
+            $successMessage = SETTINGS_UPDATED_SUCCESS;
+            $showSuccessModal = true;
+        }
     }
 }
 
@@ -142,7 +159,7 @@ include 'header.php';
                 <div class="alert alert-warning shadow-lg mb-6">
                     <div>
                         <i class="fas fa-key"></i>
-                        <span>Bitte ändern Sie Ihr Passwort, bevor Sie TimePoint weiter nutzen.</span>
+                        <span><?= SETTINGS_FORCE_PASSWORD_CHANGE_NOTICE ?></span>
                     </div>
                 </div>
             <?php endif; ?>
@@ -169,21 +186,21 @@ include 'header.php';
                     <div class="form-control">
                         <label class="label cursor-pointer justify-start gap-3" for="automatic_pause_deduction">
                             <input type="checkbox" id="automatic_pause_deduction" name="automatic_pause_deduction" class="toggle toggle-primary" <?= (int)$userInfo['automatic_pause_deduction'] === 1 ? 'checked' : '' ?>>
-                            <span class="label-text"><i class="fas fa-mug-hot mr-2"></i>Automatischer Pausenabzug</span>
+                            <span class="label-text"><i class="fas fa-mug-hot mr-2"></i><?= SETTINGS_AUTOMATIC_PAUSE_DEDUCTION ?></span>
                         </label>
                         <input type="hidden" name="pause_settings_submitted" value="1">
                     </div>
 
                     <div class="form-control">
                         <label class="label" for="pause_duration">
-                            <span class="label-text"><i class="fas fa-stopwatch mr-2"></i>Pausendauer in Minuten</span>
+                            <span class="label-text"><i class="fas fa-stopwatch mr-2"></i><?= SETTINGS_PAUSE_DURATION_MINUTES ?></span>
                         </label>
                         <input type="number" step="1" id="pause_duration" name="pause_duration" value="<?= htmlspecialchars($userInfo['pause_duration']) ?>" min="0" max="240" class="input input-bordered w-full">
                     </div>
 
                     <div class="form-control">
                         <label class="label" for="vacation_days_per_year">
-                            <span class="label-text"><i class="fas fa-umbrella-beach mr-2"></i>Urlaubstage pro Jahr</span>
+                            <span class="label-text"><i class="fas fa-umbrella-beach mr-2"></i><?= SETTINGS_VACATION_DAYS_PER_YEAR ?></span>
                         </label>
                         <input type="number" step="1" id="vacation_days_per_year" name="vacation_days_per_year" value="<?= htmlspecialchars($userInfo['vacation_days_per_year']) ?>" min="0" max="366" class="input input-bordered w-full">
                     </div>
@@ -202,9 +219,9 @@ include 'header.php';
                             <span class="label-text"><i class="fas fa-adjust mr-2"></i><?= NAV_DARK_MODE ?></span>
                         </label>
                         <select name="theme_mode" id="theme_mode" class="select select-bordered w-full">
-                            <option value="light" <?= $theme_mode == 'light' ? 'selected' : '' ?>>Hell</option>
-                            <option value="dark" <?= $theme_mode == 'dark' ? 'selected' : '' ?>>Dunkel</option>
-                            <option value="system" <?= $theme_mode == 'system' ? 'selected' : '' ?>>System</option>
+                            <option value="light" <?= $theme_mode == 'light' ? 'selected' : '' ?>><?= THEME_LIGHT ?></option>
+                            <option value="dark" <?= $theme_mode == 'dark' ? 'selected' : '' ?>><?= THEME_DARK ?></option>
+                            <option value="system" <?= $theme_mode == 'system' ? 'selected' : '' ?>><?= THEME_SYSTEM ?></option>
                         </select>
                     </div>
                 </div>
@@ -214,30 +231,30 @@ include 'header.php';
                 </div>
             </form>
 
-            <div class="divider my-8">Passwort</div>
+            <div class="divider my-8"><?= SETTINGS_PASSWORD_SECTION ?></div>
             <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <input type="hidden" name="action" value="change_password">
                 <div class="form-control">
                     <label class="label" for="current_password">
-                        <span class="label-text"><i class="fas fa-lock mr-2"></i>Aktuelles Passwort</span>
+                        <span class="label-text"><i class="fas fa-lock mr-2"></i><?= SETTINGS_CURRENT_PASSWORD ?></span>
                     </label>
                     <input type="password" id="current_password" name="current_password" class="input input-bordered w-full" required>
                 </div>
                 <div class="form-control">
                     <label class="label" for="new_password">
-                        <span class="label-text"><i class="fas fa-key mr-2"></i>Neues Passwort</span>
+                        <span class="label-text"><i class="fas fa-key mr-2"></i><?= SETTINGS_NEW_PASSWORD ?></span>
                     </label>
                     <input type="password" id="new_password" name="new_password" class="input input-bordered w-full" minlength="8" required>
                 </div>
                 <div class="form-control">
                     <label class="label" for="confirm_password">
-                        <span class="label-text"><i class="fas fa-check mr-2"></i>Neues Passwort wiederholen</span>
+                        <span class="label-text"><i class="fas fa-check mr-2"></i><?= SETTINGS_CONFIRM_NEW_PASSWORD ?></span>
                     </label>
                     <input type="password" id="confirm_password" name="confirm_password" class="input input-bordered w-full" minlength="8" required>
                 </div>
                 <div class="md:col-span-3">
                     <button type="submit" class="btn btn-primary w-full md:w-auto">
-                        <i class="fas fa-save mr-2"></i>Passwort ändern
+                        <i class="fas fa-save mr-2"></i><?= SETTINGS_CHANGE_PASSWORD ?>
                     </button>
                 </div>
             </form>
@@ -250,10 +267,10 @@ include 'header.php';
 <?php if ($successMessage && $showSuccessModal) : ?>
     <div id="successModal" class="modal modal-open">
         <div class="modal-box">
-            <h3 class="font-bold text-lg">Erfolg!</h3>
+            <h3 class="font-bold text-lg"><?= SUCCESS_MODAL_TITLE ?></h3>
             <p class="py-4"><?= $successMessage ?></p>
             <div class="modal-action">
-                <button onclick="closeModal()" class="btn btn-primary">Schließen</button>
+                <button onclick="closeModal()" class="btn btn-primary"><?= BUTTON_CLOSE ?></button>
             </div>
         </div>
     </div>

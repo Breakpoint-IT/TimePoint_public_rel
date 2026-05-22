@@ -5,11 +5,16 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $theme_mode = $theme_mode ?? ($_SESSION['theme_mode'] ?? ($_COOKIE['theme'] ?? 'light'));
 
-if (isset($_GET['lang'])) {
+if (isset($_GET['lang']) && in_array($_GET['lang'], ['de', 'en'], true)) {
     $_SESSION['lang'] = $_GET['lang'];
+    setcookie('lang', $_GET['lang'], time() + 31536000, '/', '', false, true);
 }
 
-$lang = $_SESSION['lang'] ?? 'de';
+$lang = $_SESSION['lang'] ?? ($_COOKIE['lang'] ?? 'de');
+if (!in_array($lang, ['de', 'en'], true)) {
+    $lang = 'de';
+}
+$_SESSION['lang'] = $lang;
 require_once "languages/$lang.php";
 
 if (!isset($_SESSION['user_id'])) {
@@ -350,12 +355,12 @@ $activeSession = $stmt->fetch(PDO::FETCH_ASSOC);
                 <?php endif; ?>
                 <a href="audit_log.php" class="sidebar-link <?= basename($_SERVER['PHP_SELF']) === 'audit_log.php' ? 'active' : '' ?>">
                     <i class="fas fa-clipboard-list w-6"></i>
-                    <span>Audit Log</span>
+                        <span><?= AUDIT_LOG_TITLE ?></span>
                 </a>
                 <?php if ($user_role === 'admin') : ?>
                     <a href="audit_chain_admin.php" class="sidebar-link <?= basename($_SERVER['PHP_SELF']) === 'audit_chain_admin.php' ? 'active' : '' ?>">
                         <i class="fas fa-shield-halved w-6"></i>
-                        <span>Audit-Prüfung</span>
+                        <span><?= AUDIT_CHAIN_CHECK_TITLE ?></span>
                     </a>
                 <?php endif; ?>
                 <a href="about.php" class="sidebar-link <?= basename($_SERVER['PHP_SELF']) === 'about.php' ? 'active' : '' ?>">
@@ -418,14 +423,14 @@ $activeSession = $stmt->fetch(PDO::FETCH_ASSOC);
                 </li>
             </ul>
         </div>
-        <span id="timerLabel" class="mr-2 hidden lg:inline-block font-semibold tabular-nums <?php echo $activeSession ? '' : 'hidden'; ?>">Aktuelle Arbeitszeit:</span>
+        <span id="timerLabel" class="mr-2 hidden lg:inline-block font-semibold tabular-nums <?php echo $activeSession ? '' : 'hidden'; ?>"><?= CURRENT_WORK_TIME ?>:</span>
         <div id="timer" class="mr-4 hidden lg:inline-block <?php echo $activeSession ? '' : 'hidden'; ?>">00:00:00</div>
         <div class="hidden lg:block">
             <button id="startButton" class="btn btn-primary btn-sm mr-2" style="<?php echo $activeSession ? 'display: none;' : ''; ?>">
-                <i class="fas fa-sign-in-alt mr-2"></i><span>Kommen</span>
+                <i class="fas fa-sign-in-alt mr-2"></i><span><?= FORM_COME ?></span>
             </button>
             <button id="endButton" class="btn btn-secondary btn-sm mr-4" style="<?php echo $activeSession ? '' : 'display: none;'; ?>">
-                <i class="fas fa-sign-out-alt mr-2"></i><span>Gehen</span>
+                <i class="fas fa-sign-out-alt mr-2"></i><span><?= FORM_GO ?></span>
             </button>
         </div>
         <label class="swap swap-rotate mr-4">
@@ -526,7 +531,7 @@ $activeSession = $stmt->fetch(PDO::FETCH_ASSOC);
                     .then(response => response.json())
                     .then(data => {
                         if (!data.success) {
-                            throw new Error(data.message || 'Ein Fehler ist aufgetreten');
+                            throw new Error(data.message || <?= json_encode(ERROR_GENERIC) ?>);
                         }
 
                         if (action === 'start') {
@@ -539,7 +544,7 @@ $activeSession = $stmt->fetch(PDO::FETCH_ASSOC);
                         if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'error',
-                                title: 'Fehler',
+                                title: <?= json_encode(ERROR_MODAL_TITLE) ?>,
                                 text: error.message,
                                 confirmButtonText: 'OK'
                             });
@@ -680,14 +685,14 @@ $activeSession = $stmt->fetch(PDO::FETCH_ASSOC);
             button.addEventListener('click', function() {
                 const id = this.dataset.id;
                 Swal.fire({
-                    title: 'Sind Sie sicher?',
-                    text: "Dieser Eintrag wird unwiderruflich gelÃ¶scht!",
+                    title: <?= json_encode(CONFIRM_DELETE_ENTRY_TITLE) ?>,
+                    text: <?= json_encode(CONFIRM_DELETE_ENTRY_TEXT) ?>,
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#3085d6',
                     cancelButtonColor: '#d33',
-                    confirmButtonText: 'Ja, lÃ¶schen!',
-                    cancelButtonText: 'Abbrechen'
+                    confirmButtonText: <?= json_encode(CONFIRM_DELETE_ENTRY_BUTTON) ?>,
+                    cancelButtonText: <?= json_encode(BUTTON_CANCEL) ?>
                 }).then((result) => {
                     if (result.isConfirmed) {
                         fetch('save.php', {
@@ -702,8 +707,8 @@ $activeSession = $stmt->fetch(PDO::FETCH_ASSOC);
                             if (data === "Successfully deleted") {
                                 Swal.fire({
                                     icon: 'success',
-                                    title: 'GelÃ¶scht!',
-                                    text: 'Der Eintrag wurde erfolgreich gelÃ¶scht.',
+                                    title: <?= json_encode(ENTRY_DELETED_TITLE) ?>,
+                                    text: <?= json_encode(ENTRY_DELETED_SUCCESS) ?>,
                                     showConfirmButton: false,
                                     timer: 1500
                                 });
@@ -712,7 +717,7 @@ $activeSession = $stmt->fetch(PDO::FETCH_ASSOC);
                             } else {
                                 Swal.fire({
                                     icon: 'error',
-                                    title: 'Fehler',
+                                    title: <?= json_encode(ERROR_MODAL_TITLE) ?>,
                                     text: data
                                 });
                             }
@@ -721,8 +726,8 @@ $activeSession = $stmt->fetch(PDO::FETCH_ASSOC);
                             console.error('Error:', error);
                             Swal.fire({
                                 icon: 'error',
-                                title: 'Fehler',
-                                text: 'Fehler beim LÃ¶schen des Eintrags'
+                                title: <?= json_encode(ERROR_MODAL_TITLE) ?>,
+                                text: <?= json_encode(ERROR_DELETE_ENTRY) ?>
                             });
                         });
                     }

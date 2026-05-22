@@ -14,10 +14,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 include 'config.php';
 require_once __DIR__ . '/app/audit/AuditLog.php';
 
-// Connect to the database
-$conn = new PDO("sqlite:$database");
-$conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
 /**
  * @OA\Info(title="Zeiterfassung API", version="1.0")
  */

@@ -5,9 +5,12 @@ if (!$embedded) {
     include 'header.php';
 } else {
     require_once 'config.php';
+    $lang = $_SESSION['lang'] ?? 'de';
+    $lang = in_array($lang, ['de', 'en'], true) ? $lang : 'de';
+    require_once __DIR__ . "/languages/$lang.php";
 }
 
-$version = defined('TIMEPOINT_VERSION') ? TIMEPOINT_VERSION : '1.0.0';
+$version = defined('TIMEPOINT_VERSION') ? TIMEPOINT_VERSION : '1.0.3';
 $changelogPath = __DIR__ . '/CHANGELOG.md';
 $changelogContent = is_readable($changelogPath) ? file_get_contents($changelogPath) : '';
 
@@ -22,7 +25,7 @@ function renderMarkdownInline(string $text): string
 function renderReadmeMarkdown(string $markdown): string
 {
     if (trim($markdown) === '') {
-        return '<div class="alert alert-warning"><i class="fas fa-triangle-exclamation"></i><span>CHANGELOG.md konnte nicht gelesen werden.</span></div>';
+        return '<div class="alert alert-warning"><i class="fas fa-triangle-exclamation"></i><span>' . CHANGELOG_READ_ERROR . '</span></div>';
     }
 
     $html = '';
@@ -89,7 +92,7 @@ function renderReadmeMarkdown(string $markdown): string
 
 <?php if ($embedded) : ?>
 <!DOCTYPE html>
-<html lang="de" data-theme="light">
+<html lang="<?= htmlspecialchars($lang ?? 'de') ?>" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -107,7 +110,7 @@ function renderReadmeMarkdown(string $markdown): string
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                     <h1 class="card-title text-3xl">
                         <i class="fas fa-list-check text-primary"></i>
-                        Änderungslog
+                        <?= CHANGELOG_TITLE ?>
                     </h1>
                     <div class="badge badge-primary badge-lg">Version <?= htmlspecialchars($version) ?></div>
                 </div>

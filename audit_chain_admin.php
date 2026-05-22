@@ -40,14 +40,27 @@ function auditAdminValue($value): string
 
     return (string)$value;
 }
+
+function auditAdminChainMessage(array $chainStatus): string
+{
+    $messages = [
+        'empty_log' => AUDIT_MESSAGE_EMPTY_LOG,
+        'previous_hash_mismatch' => AUDIT_MESSAGE_PREVIOUS_HASH_MISMATCH,
+        'entry_hash_mismatch' => AUDIT_MESSAGE_ENTRY_HASH_MISMATCH,
+        'hmac_mismatch' => AUDIT_MESSAGE_HMAC_MISMATCH,
+        'ok' => AUDIT_MESSAGE_OK,
+    ];
+
+    return $messages[$chainStatus['reason_code'] ?? ''] ?? (string)($chainStatus['message'] ?? '');
+}
 ?>
 
 <div class="min-h-screen bg-base-200">
     <div class="container mx-auto px-4 py-8">
         <div class="flex flex-col lg:flex-row gap-4 justify-between mb-6">
             <div>
-                <h1 class="text-3xl font-bold">Audit-Prüfung</h1>
-                <p class="text-sm opacity-70">Diagnosewerkzeug für die Integrität der Audit-Hash-Kette.</p>
+                <h1 class="text-3xl font-bold"><?= AUDIT_CHAIN_CHECK_TITLE ?></h1>
+                <p class="text-sm opacity-70"><?= AUDIT_CHAIN_DESCRIPTION ?></p>
             </div>
             <div class="flex gap-2">
                 <a href="audit_export.php?format=csv" class="btn btn-outline btn-sm">
@@ -60,7 +73,7 @@ function auditAdminValue($value): string
                     <i class="fas fa-database mr-2"></i>SQL Export
                 </a>
                 <a href="audit_log.php" class="btn btn-ghost btn-sm">
-                    <i class="fas fa-arrow-left mr-2"></i>Zum Audit Log
+                    <i class="fas fa-arrow-left mr-2"></i><?= AUDIT_TO_LOG ?>
                 </a>
             </div>
         </div>
@@ -68,33 +81,33 @@ function auditAdminValue($value): string
         <?php if ($auditError !== '') : ?>
             <div class="alert alert-error mb-6">
                 <i class="fas fa-triangle-exclamation"></i>
-                <span>Audit-Prüfung konnte nicht geladen werden: <?= htmlspecialchars($auditError) ?></span>
+                <span><?= sprintf(AUDIT_CHAIN_LOAD_ERROR, htmlspecialchars($auditError)) ?></span>
             </div>
         <?php else : ?>
             <div class="grid gap-4 lg:grid-cols-4 mb-6">
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">Status</div>
+                        <div class="stat-title"><?= AUDIT_STATUS ?></div>
                         <div class="stat-value text-2xl <?= $chainStatus['valid'] ? 'text-success' : 'text-error' ?>">
-                            <?= $chainStatus['valid'] ? 'OK' : 'Fehler' ?>
+                            <?= $chainStatus['valid'] ? 'OK' : AUDIT_ERROR ?>
                         </div>
                     </div>
                 </div>
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">Geprüfte Einträge</div>
+                        <div class="stat-title"><?= AUDIT_CHECKED_ENTRIES ?></div>
                         <div class="stat-value text-2xl"><?= htmlspecialchars((string)($chainStatus['entries_checked'] ?? 0)) ?></div>
                     </div>
                 </div>
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">Letzter gültiger Eintrag</div>
+                        <div class="stat-title"><?= AUDIT_LAST_VALID_ENTRY ?></div>
                         <div class="stat-value text-2xl"><?= htmlspecialchars((string)($chainStatus['last_valid_id'] ?? '-')) ?></div>
                     </div>
                 </div>
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">Fehler-ID</div>
+                        <div class="stat-title"><?= AUDIT_FAILED_ID ?></div>
                         <div class="stat-value text-2xl"><?= htmlspecialchars((string)($chainStatus['failed_id'] ?? '-')) ?></div>
                     </div>
                 </div>
@@ -102,29 +115,29 @@ function auditAdminValue($value): string
 
             <div class="card bg-base-100 shadow-xl mb-6">
                 <div class="card-body">
-                    <h2 class="card-title">Zusammenfassung</h2>
-                    <p><?= htmlspecialchars((string)($chainStatus['message'] ?? '')) ?></p>
+                    <h2 class="card-title"><?= AUDIT_SUMMARY ?></h2>
+                    <p><?= htmlspecialchars(auditAdminChainMessage($chainStatus)) ?></p>
                     <div class="overflow-x-auto mt-3">
                         <table class="table table-sm">
                             <tbody>
                                 <tr>
-                                    <th>Fehlercode</th>
+                                    <th><?= AUDIT_ERROR_CODE ?></th>
                                     <td><code><?= htmlspecialchars((string)($chainStatus['reason_code'] ?? 'unknown')) ?></code></td>
                                 </tr>
                                 <tr>
-                                    <th>Betroffener Eintrag</th>
+                                    <th><?= AUDIT_AFFECTED_ENTRY ?></th>
                                     <td>#<?= htmlspecialchars((string)($chainStatus['details']['entry_id'] ?? ($chainStatus['failed_id'] ?? '-'))) ?></td>
                                 </tr>
                                 <tr>
-                                    <th>Aktion</th>
+                                    <th><?= AUDIT_ACTION ?></th>
                                     <td><?= htmlspecialchars(auditAdminValue($chainStatus['details']['action'] ?? null)) ?></td>
                                 </tr>
                                 <tr>
-                                    <th>Bearbeiter</th>
+                                    <th><?= AUDIT_ACTOR ?></th>
                                     <td><?= htmlspecialchars(auditAdminValue($chainStatus['details']['actor_username'] ?? null)) ?></td>
                                 </tr>
                                 <tr>
-                                    <th>Zeitpunkt</th>
+                                    <th><?= AUDIT_TIMESTAMP ?></th>
                                     <td><?= htmlspecialchars(auditAdminValue($chainStatus['details']['created_at'] ?? null)) ?></td>
                                 </tr>
                             </tbody>
@@ -136,7 +149,7 @@ function auditAdminValue($value): string
             <?php if (!$chainStatus['valid'] && !empty($chainStatus['details'])) : ?>
                 <div class="card bg-base-100 shadow-xl mb-6">
                     <div class="card-body">
-                        <h2 class="card-title">Prüfdetails</h2>
+                        <h2 class="card-title"><?= AUDIT_CHECK_DETAILS ?></h2>
                         <div class="overflow-x-auto">
                             <table class="table table-sm">
                                 <tbody>
@@ -155,28 +168,28 @@ function auditAdminValue($value): string
 
             <div class="card bg-base-100 shadow-xl mb-6">
                 <div class="card-body">
-                    <h2 class="card-title">Vorgehen bei Fehlern</h2>
+                    <h2 class="card-title"><?= AUDIT_ERROR_PROCEDURE ?></h2>
                     <div class="space-y-2 text-sm leading-6">
-                        <p>1. Den ersten fehlerhaften Eintrag identifizieren und mit Backup oder Export vergleichen.</p>
-                        <p>2. Prüfen, ob der Eintrag nachträglich verändert, gelöscht oder mit anderem Schlüssel signiert wurde.</p>
-                        <p>3. Nur dann korrigieren, wenn der Originalzustand sicher rekonstruiert werden kann.</p>
-                        <p>4. Nicht stillschweigend alles neu hashen, sonst geht der Nachweis des Vorfalls verloren.</p>
+                        <p><?= AUDIT_PROCEDURE_STEP_1 ?></p>
+                        <p><?= AUDIT_PROCEDURE_STEP_2 ?></p>
+                        <p><?= AUDIT_PROCEDURE_STEP_3 ?></p>
+                        <p><?= AUDIT_PROCEDURE_STEP_4 ?></p>
                     </div>
                 </div>
             </div>
 
             <div class="card bg-base-100 shadow-xl">
                 <div class="card-body">
-                    <h2 class="card-title">Letzte Audit-Einträge</h2>
+                    <h2 class="card-title"><?= AUDIT_RECENT_ENTRIES ?></h2>
                     <div class="overflow-x-auto">
                         <table class="table table-zebra w-full">
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Zeitpunkt</th>
-                                    <th>Aktion</th>
-                                    <th>Bearbeiter</th>
-                                    <th>Mitarbeiter</th>
+                                    <th><?= AUDIT_TIMESTAMP ?></th>
+                                    <th><?= AUDIT_ACTION ?></th>
+                                    <th><?= AUDIT_ACTOR ?></th>
+                                    <th><?= AUDIT_EMPLOYEE ?></th>
                                     <th>Hash</th>
                                 </tr>
                             </thead>
@@ -193,7 +206,7 @@ function auditAdminValue($value): string
                                 <?php endforeach; ?>
                                 <?php if ($recentEntries === []) : ?>
                                     <tr>
-                                        <td colspan="6" class="text-center opacity-70">Keine Audit-Einträge vorhanden.</td>
+                                        <td colspan="6" class="text-center opacity-70"><?= AUDIT_NO_ENTRIES ?></td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>

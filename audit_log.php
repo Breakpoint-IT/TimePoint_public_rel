@@ -16,7 +16,7 @@ $currentUserId = (int)$_SESSION['user_id'];
 $currentRole = tpAuditResolveRole($currentUserId);
 $_SESSION['role'] = $currentRole;
 $auditError = '';
-$chainStatus = ['valid' => false, 'failed_id' => null, 'message' => 'Audit-Pruefung nicht ausgefuehrt'];
+$chainStatus = ['valid' => false, 'failed_id' => null, 'message' => AUDIT_MESSAGE_NOT_RUN, 'reason_code' => 'not_run'];
 $totalAuditEntries = 0;
 $entries = [];
 
@@ -43,16 +43,30 @@ function auditPrettyJson(?string $json): string
 
     return json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
+
+function auditChainMessage(array $chainStatus): string
+{
+    $messages = [
+        'empty_log' => AUDIT_MESSAGE_EMPTY_LOG,
+        'previous_hash_mismatch' => AUDIT_MESSAGE_PREVIOUS_HASH_MISMATCH,
+        'entry_hash_mismatch' => AUDIT_MESSAGE_ENTRY_HASH_MISMATCH,
+        'hmac_mismatch' => AUDIT_MESSAGE_HMAC_MISMATCH,
+        'ok' => AUDIT_MESSAGE_OK,
+        'not_run' => AUDIT_MESSAGE_NOT_RUN,
+    ];
+
+    return $messages[$chainStatus['reason_code'] ?? ''] ?? (string)($chainStatus['message'] ?? '');
+}
 ?>
 
 <div class="min-h-screen bg-base-200">
     <div class="container mx-auto px-4 py-8">
         <div class="flex flex-col lg:flex-row gap-4 justify-between mb-6">
             <div>
-                <h1 class="text-3xl font-bold">Audit Log</h1>
+                <h1 class="text-3xl font-bold"><?= AUDIT_LOG_TITLE ?></h1>
                 <p class="text-sm opacity-70">
-                    Die letzten 200 protokollierten Änderungen mit Hash-Kettenprüfung.
-                    Sichtbare Einträge: <?= count($entries) ?> · Gesamt: <?= $totalAuditEntries ?> · Rolle: <?= htmlspecialchars($currentRole) ?> · Benutzer-ID: <?= $currentUserId ?>
+                    <?= AUDIT_LOG_DESCRIPTION ?>
+                    <?= AUDIT_VISIBLE_ENTRIES ?>: <?= count($entries) ?> · <?= AUDIT_TOTAL_ENTRIES ?>: <?= $totalAuditEntries ?> · <?= AUDIT_ROLE ?>: <?= htmlspecialchars($currentRole) ?> · <?= AUDIT_USER_ID ?>: <?= $currentUserId ?>
                 </p>
             </div>
             <div class="flex flex-col gap-3 items-start lg:items-end">
@@ -72,7 +86,7 @@ function auditPrettyJson(?string $json): string
                 <div class="alert <?= $chainStatus['valid'] ? 'alert-success' : 'alert-error' ?> max-w-xl">
                     <i class="fas <?= $chainStatus['valid'] ? 'fa-shield-alt' : 'fa-triangle-exclamation' ?>"></i>
                     <span>
-                        <?= $chainStatus['valid'] ? 'Hash-Kette gültig' : 'Hash-Kette fehlerhaft ab Eintrag #' . htmlspecialchars((string)$chainStatus['failed_id']) ?>
+                        <?= $chainStatus['valid'] ? AUDIT_HASH_CHAIN_VALID : sprintf(AUDIT_HASH_CHAIN_INVALID_FROM, htmlspecialchars((string)$chainStatus['failed_id'])) ?>
                     </span>
                 </div>
             </div>
@@ -81,7 +95,7 @@ function auditPrettyJson(?string $json): string
         <?php if ($auditError !== '') : ?>
             <div class="alert alert-error mb-6">
                 <i class="fas fa-triangle-exclamation"></i>
-                <span>Audit Log konnte nicht geladen werden: <?= htmlspecialchars($auditError) ?></span>
+                <span><?= sprintf(AUDIT_LOG_LOAD_ERROR, htmlspecialchars($auditError)) ?></span>
             </div>
         <?php endif; ?>
 
@@ -89,21 +103,21 @@ function auditPrettyJson(?string $json): string
             <div class="grid gap-4 lg:grid-cols-3 mb-6">
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">Geprüfte Einträge</div>
+                        <div class="stat-title"><?= AUDIT_CHECKED_ENTRIES ?></div>
                         <div class="stat-value text-2xl"><?= htmlspecialchars((string)($chainStatus['entries_checked'] ?? 0)) ?></div>
                     </div>
                 </div>
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">Letzter gültiger Eintrag</div>
+                        <div class="stat-title"><?= AUDIT_LAST_VALID_ENTRY ?></div>
                         <div class="stat-value text-2xl"><?= htmlspecialchars((string)($chainStatus['last_valid_id'] ?? '-')) ?></div>
                     </div>
                 </div>
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">Prüfstatus</div>
+                        <div class="stat-title"><?= AUDIT_CHECK_STATUS ?></div>
                         <div class="stat-value text-2xl <?= $chainStatus['valid'] ? 'text-success' : 'text-error' ?>">
-                            <?= $chainStatus['valid'] ? 'OK' : 'Fehler' ?>
+                            <?= $chainStatus['valid'] ? 'OK' : AUDIT_ERROR ?>
                         </div>
                     </div>
                 </div>
@@ -113,13 +127,13 @@ function auditPrettyJson(?string $json): string
                 <div class="card-body">
                     <div class="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                         <div>
-                            <h2 class="card-title">Kettenstatus</h2>
-                            <p class="text-sm opacity-70"><?= htmlspecialchars((string)($chainStatus['message'] ?? '')) ?></p>
+                            <h2 class="card-title"><?= AUDIT_CHAIN_STATUS ?></h2>
+                            <p class="text-sm opacity-70"><?= htmlspecialchars(auditChainMessage($chainStatus)) ?></p>
                         </div>
                         <?php if ($currentRole === 'admin') : ?>
                             <div>
                                 <a href="audit_chain_admin.php" class="btn btn-outline btn-sm">
-                                    <i class="fas fa-shield-halved mr-2"></i>Prüfdetails öffnen
+                                    <i class="fas fa-shield-halved mr-2"></i><?= AUDIT_OPEN_CHECK_DETAILS ?>
                                 </a>
                             </div>
                         <?php endif; ?>
@@ -130,23 +144,23 @@ function auditPrettyJson(?string $json): string
                             <table class="table table-sm">
                                 <tbody>
                                     <tr>
-                                        <th>Fehlercode</th>
+                                        <th><?= AUDIT_ERROR_CODE ?></th>
                                         <td><code><?= htmlspecialchars((string)($chainStatus['reason_code'] ?? 'unknown')) ?></code></td>
                                     </tr>
                                     <tr>
-                                        <th>Betroffener Eintrag</th>
+                                        <th><?= AUDIT_AFFECTED_ENTRY ?></th>
                                         <td>#<?= htmlspecialchars((string)($chainStatus['details']['entry_id'] ?? $chainStatus['failed_id'])) ?></td>
                                     </tr>
                                     <tr>
-                                        <th>Aktion</th>
+                                        <th><?= AUDIT_ACTION ?></th>
                                         <td><?= htmlspecialchars((string)($chainStatus['details']['action'] ?? '-')) ?></td>
                                     </tr>
                                     <tr>
-                                        <th>Bearbeiter</th>
+                                        <th><?= AUDIT_ACTOR ?></th>
                                         <td><?= htmlspecialchars((string)($chainStatus['details']['actor_username'] ?? '-')) ?></td>
                                     </tr>
                                     <tr>
-                                        <th>Zeitpunkt</th>
+                                        <th><?= AUDIT_TIMESTAMP ?></th>
                                         <td><?= htmlspecialchars((string)($chainStatus['details']['created_at'] ?? '-')) ?></td>
                                     </tr>
                                 </tbody>
@@ -164,12 +178,12 @@ function auditPrettyJson(?string $json): string
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Zeitpunkt</th>
-                                <th>Aktion</th>
-                                <th>Bearbeiter</th>
-                                <th>Mitarbeiter</th>
-                                <th>Grund</th>
-                                <th>Details</th>
+                                <th><?= AUDIT_TIMESTAMP ?></th>
+                                <th><?= AUDIT_ACTION ?></th>
+                                <th><?= AUDIT_ACTOR ?></th>
+                                <th><?= AUDIT_EMPLOYEE ?></th>
+                                <th><?= AUDIT_REASON ?></th>
+                                <th><?= AUDIT_DETAILS ?></th>
                                 <th>Hash</th>
                             </tr>
                         </thead>
@@ -189,11 +203,11 @@ function auditPrettyJson(?string $json): string
                                     <td class="max-w-xs whitespace-normal"><?= htmlspecialchars($entry['reason'] ?: '-') ?></td>
                                     <td>
                                         <details class="collapse collapse-arrow bg-base-200 min-w-72">
-                                            <summary class="collapse-title text-sm">Alt / Neu</summary>
+                                            <summary class="collapse-title text-sm"><?= AUDIT_OLD_NEW ?></summary>
                                             <div class="collapse-content">
-                                                <div class="text-xs font-semibold mb-1">Alt</div>
+                                                <div class="text-xs font-semibold mb-1"><?= AUDIT_OLD ?></div>
                                                 <pre class="text-xs whitespace-pre-wrap"><?= htmlspecialchars(auditPrettyJson($entry['old_values'])) ?></pre>
-                                                <div class="text-xs font-semibold mt-3 mb-1">Neu</div>
+                                                <div class="text-xs font-semibold mt-3 mb-1"><?= AUDIT_NEW ?></div>
                                                 <pre class="text-xs whitespace-pre-wrap"><?= htmlspecialchars(auditPrettyJson($entry['new_values'])) ?></pre>
                                             </div>
                                         </details>
@@ -206,7 +220,7 @@ function auditPrettyJson(?string $json): string
                             <?php if (!$entries) : ?>
                                 <tr>
                                     <td colspan="8" class="text-center opacity-70">
-                                        <?= $totalAuditEntries > 0 ? 'Keine Audit-Einträge für diese Ansicht sichtbar.' : 'Noch keine Audit-Einträge vorhanden.' ?>
+                                        <?= $totalAuditEntries > 0 ? AUDIT_NO_VISIBLE_ENTRIES : AUDIT_NO_ENTRIES ?>
                                     </td>
                                 </tr>
                             <?php endif; ?>

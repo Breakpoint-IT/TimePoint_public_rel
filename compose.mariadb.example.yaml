@@ -2,7 +2,7 @@ services:
   timepoint:
     build:
       context: .
-    container_name: timepoint
+    container_name: ${TIMEPOINT_CONTAINER_NAME:-timepoint}
     depends_on:
       - timepoint-db
     environment:
@@ -16,29 +16,27 @@ services:
       TIMEPOINT_DB_PASSWORD: ${TIMEPOINT_DB_PASSWORD:?Bitte TIMEPOINT_DB_PASSWORD in .env oder Deployment-ENV setzen}
     expose:
       - "80"
-
-    #ports:
-      # - "80:80"
     volumes:
       - timepoint_runtime:/var/www/html/runtime
       - ./assets/db:/var/www/html/legacy-db:ro
     restart: unless-stopped
 
   timepoint-db:
-    image: postgres:16-alpine
+    image: mariadb:11.4
     ports:
-      - "5432:5432"
+      - "3306:3306"
       # Bind on IP
       #- "100.x.y.z:5432:5432"
-    container_name: timepoint-db
+    container_name: ${TIMEPOINT_DB_CONTAINER_NAME:-timepoint-db}
     environment:
-      POSTGRES_DB: ${TIMEPOINT_DB_NAME:?Bitte TIMEPOINT_DB_NAME in .env oder Deployment-ENV setzen}
-      POSTGRES_USER: ${TIMEPOINT_DB_USER:?Bitte TIMEPOINT_DB_USER in .env oder Deployment-ENV setzen}
-      POSTGRES_PASSWORD: ${TIMEPOINT_DB_PASSWORD:?Bitte TIMEPOINT_DB_PASSWORD in .env oder Deployment-ENV setzen}
+      MARIADB_DATABASE: ${TIMEPOINT_DB_NAME:?Bitte TIMEPOINT_DB_NAME in .env oder Deployment-ENV setzen}
+      MARIADB_USER: ${TIMEPOINT_DB_USER:?Bitte TIMEPOINT_DB_USER in .env oder Deployment-ENV setzen}
+      MARIADB_PASSWORD: ${TIMEPOINT_DB_PASSWORD:?Bitte TIMEPOINT_DB_PASSWORD in .env oder Deployment-ENV setzen}
+      MARIADB_ROOT_PASSWORD: ${TIMEPOINT_DB_ROOT_PASSWORD:?Bitte TIMEPOINT_DB_ROOT_PASSWORD in .env oder Deployment-ENV setzen}
     volumes:
-      - timepoint_postgres_data:/var/lib/postgresql/data
+      - timepoint_mariadb_data:/var/lib/mysql
     restart: unless-stopped
 
 volumes:
   timepoint_runtime:
-  timepoint_postgres_data:
+  timepoint_mariadb_data:

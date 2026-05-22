@@ -1,8 +1,11 @@
 <?php
 require_once 'config.php';
+$lang = $_SESSION['lang'] ?? ($_COOKIE['lang'] ?? 'de');
+$lang = in_array($lang, ['de', 'en'], true) ? $lang : 'de';
+require_once __DIR__ . "/languages/$lang.php";
 if (getAppSetting('show_privacy_link', '1') !== '1') {
     http_response_code(404);
-    exit('Datenschutz ist deaktiviert.');
+    exit(LEGAL_PRIVACY_DISABLED);
 }
 include 'header.php';
 ?>
@@ -14,17 +17,17 @@ include 'header.php';
             <div class="card-body">
                 <h1 class="card-title text-3xl mb-6">
                     <i class="fa-solid fa-shield-halved mr-2"></i>
-                    Datenschutz
+                    <?= NAV_PRIVACY ?>
                 </h1>
 
                 <div class="alert alert-warning mb-6">
                     <i class="fa-solid fa-triangle-exclamation"></i>
                     <span>
-                        Bitte ersetzen Sie die Platzhalter vor der Veröffentlichung durch die tatsächlichen Datenschutzangaben.
+                        <?= LEGAL_PRIVACY_PLACEHOLDER_NOTICE ?>
                     </span>
                 </div>
 
-                <?php include __DIR__ . '/partials/privacy_content.php'; ?>
+                <?php renderLegalPageContent('privacy'); ?>
             </div>
         </div>
     </div>

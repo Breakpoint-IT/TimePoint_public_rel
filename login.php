@@ -5,15 +5,15 @@ include 'config.php';
 // Supported languages
 $supported_languages = ['de', 'en'];
 
-// Detect browser language if not set
-if (!isset($_SESSION['lang'])) {
-    $lang = substr($_SERVER['HTTP_ACCEPT_LANGUAGE'], 0, 2);
-    $_SESSION['lang'] = in_array($lang, $supported_languages) ? $lang : 'de';
-}
-
-// Allow manual language change
 if (isset($_GET['lang'])) {
-    $_SESSION['lang'] = in_array($_GET['lang'], $supported_languages) ? $_GET['lang'] : $_SESSION['lang'];
+    $_SESSION['lang'] = in_array($_GET['lang'], $supported_languages, true) ? $_GET['lang'] : ($_SESSION['lang'] ?? 'de');
+    setcookie('lang', $_SESSION['lang'], time() + 31536000, '/', '', false, true);
+} elseif (!isset($_SESSION['lang'])) {
+    $cookieLang = $_COOKIE['lang'] ?? '';
+    $browserLang = substr($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? 'de', 0, 2);
+    $_SESSION['lang'] = in_array($cookieLang, $supported_languages, true)
+        ? $cookieLang
+        : (in_array($browserLang, $supported_languages, true) ? $browserLang : 'de');
 }
 
 $lang = $_SESSION['lang'];
@@ -181,7 +181,11 @@ $resolved_theme = $theme_mode === 'system' ? 'light' : $theme_mode;
 </head>
 
 <body class="bg-base-200 text-base-content flex justify-center items-center min-h-screen p-4 transition-colors duration-300">
-    <div class="absolute right-4 top-4">
+    <div class="absolute right-4 top-4 flex items-center gap-2">
+        <div class="join" aria-label="<?= LANGUAGE_SELECTION ?>">
+            <a href="?lang=de" class="btn btn-sm join-item <?= $lang === 'de' ? 'btn-primary' : 'btn-ghost' ?>">DE</a>
+            <a href="?lang=en" class="btn btn-sm join-item <?= $lang === 'en' ? 'btn-primary' : 'btn-ghost' ?>">EN</a>
+        </div>
         <button type="button" id="loginThemeToggle" class="btn btn-circle btn-ghost" aria-label="Darkmode umschalten" title="Darkmode umschalten">
             <i id="loginThemeIcon" class="fa-solid fa-moon"></i>
         </button>
@@ -219,14 +223,14 @@ $resolved_theme = $theme_mode === 'system' ? 'light' : $theme_mode;
                     <label class="label">
                         <span class="label-text"><?= USERNAME_LABEL ?></span>
                     </label>
-                    <input type="text" name="username" placeholder="Enter your username" class="input input-bordered w-full bg-base-200 focus:bg-base-100 transition-colors duration-300" required />
+                    <input type="text" name="username" placeholder="<?= LOGIN_USERNAME_PLACEHOLDER ?>" class="input input-bordered w-full bg-base-200 focus:bg-base-100 transition-colors duration-300" required />
                 </div>
                 
                 <div class="form-control">
                     <label class="label">
                         <span class="label-text"><?= PASSWORD_LABEL ?></span>
                     </label>
-                    <input type="password" name="password" placeholder="Enter your password" class="input input-bordered w-full bg-base-200 focus:bg-base-100 transition-colors duration-300" required />
+                    <input type="password" name="password" placeholder="<?= LOGIN_PASSWORD_PLACEHOLDER ?>" class="input input-bordered w-full bg-base-200 focus:bg-base-100 transition-colors duration-300" required />
                 </div>
                 
                 <div class="form-control mt-6">
@@ -237,19 +241,14 @@ $resolved_theme = $theme_mode === 'system' ? 'light' : $theme_mode;
             </form>
 
             <div class="text-center mt-3">
-                <a href="forgot_password.php" class="link link-primary text-sm hover:underline">Passwort vergessen?</a>
+                <a href="forgot_password.php" class="link link-primary text-sm hover:underline"><?= LOGIN_FORGOT_PASSWORD ?></a>
             </div>
             
-            <?php if ($totalUsers == 0) : ?>
-                <div class="text-center mt-4">
-                    <a href="register.php" class="link link-primary text-sm hover:underline"><?= REGISTER_BUTTON ?></a>
-                </div>
-            <?php endif; ?>
             <?php if ($showImprintLink || $showPrivacyLink) : ?>
                 <div class="text-center mt-3">
                     <?php if ($showImprintLink) : ?>
                         <button type="button" class="link link-primary text-sm hover:underline" onclick="document.getElementById('imprintModal').showModal()">
-                            Impressum
+                            <?= NAV_IMPRINT ?>
                         </button>
                     <?php endif; ?>
                     <?php if ($showImprintLink && $showPrivacyLink) : ?>
@@ -257,70 +256,51 @@ $resolved_theme = $theme_mode === 'system' ? 'light' : $theme_mode;
                     <?php endif; ?>
                     <?php if ($showPrivacyLink) : ?>
                         <button type="button" class="link link-primary text-sm hover:underline" onclick="document.getElementById('privacyModal').showModal()">
-                            Datenschutz
+                            <?= NAV_PRIVACY ?>
                         </button>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>
         <div class="text-center pb-6">
-            <p class="text-xs opacity-70">© 2026 Marek Tonino - TimePoint Zeiterfassung</p>
+            <p class="text-xs opacity-70"><?= FOOTER_TEXT ?></p>
         </div>
     </div>
     <?php if ($showImprintLink) : ?>
     <dialog id="imprintModal" class="modal">
         <div class="modal-box max-w-3xl">
-            <h3 class="font-bold text-lg mb-4">Impressum</h3>
-            <div class="space-y-4 text-sm">
-                <section>
-                    <h4 class="font-semibold">Angaben gemäß § 5 DDG</h4>
-                    <p>[Unternehmen / Vorname Nachname]</p>
-                    <p>[Straße Hausnummer]</p>
-                    <p>[PLZ Ort]</p>
-                    <p>[Deutschland]</p>
-                </section>
-                <section>
-                    <h4 class="font-semibold">Kontakt</h4>
-                    <p>Telefon: [Telefonnummer]</p>
-                    <p>E-Mail: [E-Mail-Adresse]</p>
-                </section>
-                <section>
-                    <h4 class="font-semibold">Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h4>
-                    <p>[Vorname Nachname], [Straße Hausnummer], [PLZ Ort]</p>
-                </section>
-                <section>
-                    <h4 class="font-semibold">Verbraucherstreitbeilegung</h4>
-                    <p>Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.</p>
-                </section>
-                <a href="imprint.php" class="link link-primary">Impressum als eigene Seite öffnen</a>
+            <h3 class="font-bold text-lg mb-4"><?= NAV_IMPRINT ?></h3>
+            <div class="space-y-4 text-sm max-h-[65vh] overflow-y-auto">
+                <?php renderLegalPageContent('imprint'); ?>
+                <a href="imprint.php" class="link link-primary"><?= LEGAL_OPEN_IMPRINT_PAGE ?></a>
             </div>
             <div class="modal-action">
                 <form method="dialog">
-                    <button class="btn">Schließen</button>
+                    <button class="btn"><?= BUTTON_CLOSE ?></button>
                 </form>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">
-            <button>Schließen</button>
+            <button><?= BUTTON_CLOSE ?></button>
         </form>
     </dialog>
     <?php endif; ?>
     <?php if ($showPrivacyLink) : ?>
     <dialog id="privacyModal" class="modal">
         <div class="modal-box max-w-3xl">
-            <h3 class="font-bold text-lg mb-4">Datenschutz</h3>
+            <h3 class="font-bold text-lg mb-4"><?= NAV_PRIVACY ?></h3>
             <div class="space-y-4 text-sm max-h-[65vh] overflow-y-auto">
-                <?php include __DIR__ . '/partials/privacy_content.php'; ?>
-                <a href="privacy.php" class="link link-primary">Datenschutz als eigene Seite öffnen</a>
+                <?php renderLegalPageContent('privacy'); ?>
+                <a href="privacy.php" class="link link-primary"><?= LEGAL_OPEN_PRIVACY_PAGE ?></a>
             </div>
             <div class="modal-action">
                 <form method="dialog">
-                    <button class="btn">Schließen</button>
+                    <button class="btn"><?= BUTTON_CLOSE ?></button>
                 </form>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">
-            <button>Schließen</button>
+            <button><?= BUTTON_CLOSE ?></button>
         </form>
     </dialog>
     <?php endif; ?>

@@ -21,7 +21,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
         $stmt->execute([$user_id]);
         $managedUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $conn->prepare("SELECT z.*, u.username, u.id as user_id, u.regelarbeitszeit, u.ueberstunden as vorherige_ueberstunden, strftime('%Y-%m-%d', z.startzeit) AS day, strftime('%W', z.startzeit) AS weekNumber 
+        $stmt = $conn->prepare("SELECT z.*, u.username, u.id as user_id, u.regelarbeitszeit, u.ueberstunden as vorherige_ueberstunden, " . tpSqlDate('z.startzeit') . " AS day, " . tpSqlWeek('z.startzeit') . " AS week_number
                                 FROM zeiterfassung z
                                 JOIN users u ON z.user_id = u.id
                                 WHERE z.user_id != ?
@@ -32,7 +32,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
         $stmt->execute([$user_id]);
         $managedUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $conn->prepare("SELECT z.*, u.username, u.id as user_id, u.regelarbeitszeit, u.ueberstunden as vorherige_ueberstunden, strftime('%Y-%m-%d', z.startzeit) AS day, strftime('%W', z.startzeit) AS weekNumber 
+        $stmt = $conn->prepare("SELECT z.*, u.username, u.id as user_id, u.regelarbeitszeit, u.ueberstunden as vorherige_ueberstunden, " . tpSqlDate('z.startzeit') . " AS day, " . tpSqlWeek('z.startzeit') . " AS week_number
                                 FROM zeiterfassung z
                                 JOIN users u ON z.user_id = u.id
                                 WHERE u.supervisor_id = ?
@@ -92,15 +92,16 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
             $totalOverMinutes += $overMinutes;
         }
 
-        $totalOverMinutes += ($data['vorherige_ueberstunden'] * 60);
+        $totalOverMinutes = (int)round($totalOverMinutes + ($data['vorherige_ueberstunden'] * 60));
 
         $isNegative = $totalOverMinutes < 0;
-        $totalOverHours = floor(abs($totalOverMinutes) / 60);
-        $totalOverMinutes = abs($totalOverMinutes % 60);
+        $totalOverHours = intdiv(abs($totalOverMinutes), 60);
+        $remainingOverMinutes = abs($totalOverMinutes) % 60;
+        $formattedOvertime = ($isNegative ? '-' : '') . sprintf("%02d:%02d", $totalOverHours, $remainingOverMinutes);
 
         $ueberstundenListe[$userId] = [
             'username' => $data['username'],
-            'ueberstunden' => ($isNegative ? '-' : '') . sprintf("%02d:%02d", $totalOverHours, $totalOverMinutes)
+            'ueberstunden' => $formattedOvertime
         ];
 
         $detaillierteDaten[$userId] = [
@@ -109,7 +110,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
             'total_hours' => round($data['total_hours'], 2),
             'total_days' => $data['total_days'],
             'avg_hours_per_day' => $data['total_days'] > 0 ? round($data['total_hours'] / $data['total_days'], 2) : 0,
-            'ueberstunden' => ($isNegative ? '-' : '') . sprintf("%02d:%02d", $totalOverHours, $totalOverMinutes)
+            'ueberstunden' => $formattedOvertime
         ];
     }
 }
@@ -201,12 +202,12 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                             <input type="text" 
                                 id="searchInput" 
                                 class="input input-bordered search-input" 
-                                placeholder="Suche nach Mitarbeiter...">
+                                placeholder="<?= COMMON_SEARCH_BY_EMPLOYEE ?>">
                         </div>
                         <div class="flex gap-2 flex-wrap">
-                            <span class="badge badge-primary filter-badge" data-filter="all">Alle</span>
-                            <span class="badge badge-secondary filter-badge" data-filter="overtime">Überstunden</span>
-                            <span class="badge badge-warning filter-badge" data-filter="undertime">Minusstunden</span>
+                            <span class="badge badge-primary filter-badge" data-filter="all"><?= COMMON_ALL ?></span>
+                            <span class="badge badge-secondary filter-badge" data-filter="overtime"><?= OVERTIME ?></span>
+                            <span class="badge badge-warning filter-badge" data-filter="undertime"><?= SUPERVISOR_UNDERTIME ?></span>
                         </div>
                     </div>
                 </div>
@@ -233,7 +234,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                                 </div>
                                 <label class="label cursor-pointer justify-start gap-3">
                                     <input type="checkbox" name="force_password_change" class="checkbox checkbox-primary checkbox-sm">
-                                    <span class="label-text">Passwortänderung beim ersten Login erzwingen</span>
+                                    <span class="label-text whitespace-normal leading-snug"><?= FORM_FORCE_PASSWORD_CHANGE ?></span>
                                 </label>
                                 <button type="submit" class="btn btn-primary btn-sm md:col-span-2">
                                     <i class="fas fa-user-plus"></i>
@@ -268,32 +269,32 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                 <div class="card bg-base-100 shadow-xl mb-8">
                     <div class="card-body">
                         <h3 class="card-title text-xl">
-                            <i class="fas fa-plus-circle mr-2"></i>Fehlenden Tag nachtragen
+                            <i class="fas fa-plus-circle mr-2"></i><?= COMMON_MISSING_DAY ?>
                         </h3>
                         <form id="supervisorAddRecordForm" class="grid grid-cols-1 md:grid-cols-8 gap-3 items-end">
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Mitarbeiter</span></label>
+                                <label class="label py-1"><span class="label-text"><?= AUDIT_EMPLOYEE ?></span></label>
                                 <select name="user_id" class="select select-bordered select-sm" required>
-                                    <option value="">Auswählen</option>
+                                    <option value=""><?= COMMON_SELECT ?></option>
                                     <?php foreach ($managedUsers as $managedUser) : ?>
                                         <option value="<?= htmlspecialchars($managedUser['id']) ?>"><?= htmlspecialchars($managedUser['username']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Start</span></label>
+                                <label class="label py-1"><span class="label-text"><?= FORM_START ?></span></label>
                                 <input type="datetime-local" name="startzeit" class="input input-bordered input-sm" required>
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Ende</span></label>
+                                <label class="label py-1"><span class="label-text"><?= FORM_END ?></span></label>
                                 <input type="datetime-local" name="endzeit" class="input input-bordered input-sm" required>
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Pause (Minuten)</span></label>
+                                <label class="label py-1"><span class="label-text"><?= FORM_BREAK_MINUTES ?></span></label>
                                 <input type="number" name="manual_pause" min="0" step="1" value="0" class="input input-bordered input-sm">
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Standort</span></label>
+                                <label class="label py-1"><span class="label-text"><?= FORM_LOCATION ?></span></label>
                                 <select name="standort" class="select select-bordered select-sm">
                                     <option value="<?= LOCATION_OFFICE_VALUE ?>"><?= LOCATION_OFFICE ?></option>
                                     <option value="<?= LOCATION_HOME_OFFICE_VALUE ?>"><?= LOCATION_HOME_OFFICE ?></option>
@@ -301,16 +302,16 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                                 </select>
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Kommentar</span></label>
+                                <label class="label py-1"><span class="label-text"><?= FORM_COMMENT ?></span></label>
                                 <input type="text" name="beschreibung" class="input input-bordered input-sm">
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Änderungsgrund</span></label>
+                                <label class="label py-1"><span class="label-text"><?= COMMON_CHANGE_REASON ?></span></label>
                                 <input type="text" name="audit_reason" class="input input-bordered input-sm" required>
                             </div>
                             <button type="submit" class="btn btn-primary btn-sm">
                                 <i class="fas fa-plus"></i>
-                                Nachtragen
+                                <?= COMMON_ADD_LATER ?>
                             </button>
                         </form>
                     </div>
@@ -323,9 +324,9 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                         </h3>
                         <div class="flex flex-col md:flex-row gap-3 items-end">
                             <div class="form-control w-full md:max-w-xs">
-                                <label class="label py-1"><span class="label-text">Mitarbeiter</span></label>
+                                <label class="label py-1"><span class="label-text"><?= AUDIT_EMPLOYEE ?></span></label>
                                 <select id="pdfExportUser" class="select select-bordered select-sm">
-                                    <option value="">Mitarbeiter auswählen</option>
+                                    <option value=""><?= COMMON_SELECT_EMPLOYEE ?></option>
                                     <?php foreach ($managedUsers as $managedUser) : ?>
                                         <option value="<?= htmlspecialchars($managedUser['id']) ?>"><?= htmlspecialchars($managedUser['username']) ?></option>
                                     <?php endforeach; ?>
@@ -333,25 +334,25 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                             </div>
                             <button type="button" id="exportUserPdfButton" class="btn btn-outline btn-error btn-sm">
                                 <i class="fas fa-file-pdf"></i>
-                                Mitarbeiter PDF
+                                <?= SUPERVISOR_PDF_EMPLOYEE ?>
                             </button>
                             <button type="button" id="exportUserPdfAButton" class="btn btn-error btn-sm">
                                 <i class="fas fa-file-pdf"></i>
-                                Mitarbeiter PDF/A
+                                <?= SUPERVISOR_PDFA_EMPLOYEE ?>
                             </button>
                             <a href="export_pdf.php?mode=all" class="btn btn-error btn-sm">
                                 <i class="fas fa-file-pdf"></i>
-                                Gesamtauswertung PDF
+                                <?= SUPERVISOR_PDF_ALL ?>
                             </a>
                             <a href="export_pdf.php?mode=all&pdfa=1" class="btn btn-error btn-sm">
                                 <i class="fas fa-file-pdf"></i>
-                                Gesamtauswertung PDF/A
+                                <?= SUPERVISOR_PDFA_ALL ?>
                             </a>
                         </div>
                         <div class="divider"></div>
                         <form id="mailPdfReportsForm" class="grid grid-cols-1 lg:grid-cols-[minmax(240px,1fr)_220px_auto] gap-4 items-end">
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Mitarbeiter per E-Mail versenden</span></label>
+                                <label class="label py-1"><span class="label-text"><?= SUPERVISOR_EMAIL_EMPLOYEES ?></span></label>
                                 <select name="user_ids[]" class="select select-bordered min-h-32" multiple size="6" required>
                                     <?php foreach ($managedUsers as $managedUser) : ?>
                                         <option value="<?= htmlspecialchars($managedUser['id']) ?>"><?= htmlspecialchars($managedUser['username']) ?></option>
@@ -359,7 +360,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                                 </select>
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Format</span></label>
+                                <label class="label py-1"><span class="label-text"><?= COMMON_FORMAT ?></span></label>
                                 <div class="join">
                                     <label class="btn btn-sm join-item">
                                         <input type="radio" name="pdf_format" value="pdf" class="radio radio-xs mr-2" checked>
@@ -373,7 +374,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                             </div>
                             <button type="submit" class="btn btn-primary btn-sm">
                                 <i class="fas fa-envelope"></i>
-                                Per Mail senden
+                                <?= COMMON_SEND_BY_EMAIL ?>
                             </button>
                         </form>
                     </div>
@@ -384,7 +385,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="card bg-base-100 shadow-xl">
                             <div class="card-body">
-                                <h3 class="card-title">Überstunden Übersicht</h3>
+                                <h3 class="card-title"><?= SUPERVISOR_OVERTIME_OVERVIEW ?></h3>
                                 <div class="chart-container">
                                     <canvas id="overtimeChart"></canvas>
                                 </div>
@@ -392,7 +393,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                         </div>
                         <div class="card bg-base-100 shadow-xl">
                             <div class="card-body">
-                                <h3 class="card-title">Regelarbeitszeit pro Mitarbeiter</h3>
+                                <h3 class="card-title"><?= SUPERVISOR_REGULAR_HOURS_BY_EMPLOYEE ?></h3>
                                 <div class="chart-container">
                                     <canvas id="regularHoursChart"></canvas>
                                 </div>
@@ -416,7 +417,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                                             <?= htmlspecialchars($data['ueberstunden']) ?>
                                         </p>
                                         <div class="card-actions justify-end">
-                                            <button class="btn btn-primary btn-sm" onclick="showDetails('<?= $userId ?>')">Details</button>
+                                            <button class="btn btn-primary btn-sm" onclick="showDetails('<?= $userId ?>')"><?= COMMON_DETAILS ?></button>
                                         </div>
                                     </div>
                                 </div>
@@ -442,7 +443,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                                         <input type="text" 
                                             id="userSearchInput" 
                                             class="input input-bordered w-full" 
-                                            placeholder="Mitarbeiter suchen...">
+                                            placeholder="<?= COMMON_SEARCH_EMPLOYEE ?>">
                                     </div>
                                 </div>
                             </div>
@@ -517,12 +518,12 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                                         $pagedEntries = array_slice($groupedEntries, $start, $itemsPerPage, true);
 
                                         foreach ($pagedEntries as $group) {
-                                            $totalDuration = $group['total_duration']; // Already includes break deduction
-                                            $hours = floor($totalDuration / 60);
+                                            $totalDuration = (int)round($group['total_duration']); // Already includes break deduction
+                                            $hours = intdiv($totalDuration, 60);
                                             $minutes = $totalDuration % 60;
-                                            $overtime = $totalDuration - ($group['regelarbeitszeit'] * 60);
-                                            $overtimeHours = floor(abs($overtime) / 60);
-                                            $overtimeMinutes = abs($overtime % 60);
+                                            $overtime = (int)round($totalDuration - ($group['regelarbeitszeit'] * 60));
+                                            $overtimeHours = intdiv(abs($overtime), 60);
+                                            $overtimeMinutes = abs($overtime) % 60;
 
                                             // Summary row
                                             echo '<tr class="group-header hover:bg-base-200 cursor-pointer" data-user-id="' . $group['user_id'] . '" data-date="' . $group['date'] . '">
@@ -558,8 +559,9 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                                             foreach ($group['entries'] as $entry) {
                                                 $entryStart = new DateTime($entry['startzeit']);
                                                 $entryEnd = new DateTime($entry['endzeit']);
-                                                $entryHours = floor($entry['duration'] / 60);
-                                                $entryMinutes = $entry['duration'] % 60;
+                                                $entryDuration = (int)round($entry['duration']);
+                                                $entryHours = intdiv($entryDuration, 60);
+                                                $entryMinutes = $entryDuration % 60;
 
                                                 echo '<tr class="supervisor-edit-row" data-id="' . htmlspecialchars($entry['id']) . '">
                                                         <td><input type="datetime-local" name="startzeit" class="input input-bordered input-xs w-44" value="' . $entryStart->format('Y-m-d\TH:i') . '"></td>
@@ -646,7 +648,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
     <dialog id="details_modal" class="modal">
         <div class="modal-box w-11/12 max-w-7xl bg-base-200">
             <div class="modal-header flex justify-between items-center mb-6">
-                <h3 class="font-bold text-2xl" id="modal_title">Detaillierte Übersicht</h3>
+                <h3 class="font-bold text-2xl" id="modal_title"><?= SUPERVISOR_DETAIL_TITLE ?></h3>
                 <form method="dialog">
                     <button class="btn btn-circle btn-ghost">✕</button>
                 </form>
@@ -656,11 +658,46 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">
-            <button>Schließen</button>
+            <button><?= BUTTON_CLOSE ?></button>
         </form>
     </dialog>
 
     <script>
+        const supervisorI18n = {
+            overviewFor: <?= json_encode(SUPERVISOR_OVERVIEW_FOR) ?>,
+            regularWorkingHours: <?= json_encode(REGULAR_WORKING_HOURS) ?>,
+            hoursPerDay: <?= json_encode(DASHBOARD_HOURS_PER_DAY) ?>,
+            workedDays: <?= json_encode(SUPERVISOR_WORKED_DAYS) ?>,
+            totalHours: <?= json_encode(SUPERVISOR_TOTAL_HOURS) ?>,
+            inThisPeriod: <?= json_encode(SUPERVISOR_IN_THIS_PERIOD) ?>,
+            workingHours: <?= json_encode(SUPERVISOR_WORKING_HOURS) ?>,
+            noticeTitle: <?= json_encode(SUPERVISOR_NOTICE_TITLE) ?>,
+            overtime: <?= json_encode(OVERTIME) ?>,
+            undertime: <?= json_encode(SUPERVISOR_UNDERTIME) ?>,
+            notice: <?= json_encode(SUPERVISOR_DYNAMIC_NOTICE) ?>,
+            noDetails: <?= json_encode(SUPERVISOR_NO_DETAILS) ?>,
+            chartHours: <?= json_encode(SUPERVISOR_CHART_HOURS) ?>,
+            chartRegularHours: <?= json_encode(SUPERVISOR_CHART_REGULAR_HOURS) ?>,
+            chartHoursPerDay: <?= json_encode(SUPERVISOR_CHART_HOURS_PER_DAY) ?>,
+            error: <?= json_encode(ERROR_MODAL_TITLE) ?>,
+            genericError: <?= json_encode(ERROR_GENERIC) ?>,
+            selectEmployeeTitle: <?= json_encode(COMMON_SELECT_EMPLOYEE) ?>,
+            selectEmployeeText: <?= json_encode(VALIDATION_SELECT_EMPLOYEE) ?>,
+            selectAtLeastOneEmployee: <?= json_encode(VALIDATION_SELECT_AT_LEAST_ONE_EMPLOYEE) ?>,
+            sending: <?= json_encode(SUPERVISOR_SENDING) ?>,
+            changeReason: <?= json_encode(SUPERVISOR_EDIT_REASON_TITLE) ?>,
+            editReasonLabel: <?= json_encode(SUPERVISOR_EDIT_REASON_LABEL) ?>,
+            deleteReasonLabel: <?= json_encode(SUPERVISOR_DELETE_REASON_LABEL) ?>,
+            reasonRequired: <?= json_encode(VALIDATION_REASON_REQUIRED) ?>,
+            save: <?= json_encode(COMMON_SAVE) ?>,
+            cancel: <?= json_encode(BUTTON_CANCEL) ?>,
+            deleteEntryTitle: <?= json_encode(CONFIRM_DELETE_ENTRY_TITLE) ?>,
+            deleteEntryText: <?= json_encode(CONFIRM_DELETE_ENTRY_PERMANENT_TEXT) ?>,
+            deleteEntryButton: <?= json_encode(CONFIRM_DELETE_ENTRY_BUTTON) ?>,
+            deleted: <?= json_encode(ENTRY_DELETED_TITLE) ?>,
+            deleteFailed: <?= json_encode(ENTRY_DELETE_FAILED) ?>
+        };
+
         const detaillierteDaten = <?= json_encode($detaillierteDaten) ?>;
         const itemsPerPage = 10; // Anzahl der Einträge pro Seite
         let currentPage = 1;
@@ -673,25 +710,25 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
             const userData = detaillierteDaten[userId];
 
             if (userData) {
-                modalTitle.textContent = `Übersicht für ${userData.username}`;
+                modalTitle.textContent = supervisorI18n.overviewFor.replace('%s', userData.username);
                 modalContent.innerHTML = `
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div class="stat bg-base-100 rounded-box shadow-lg">
                     <div class="stat-figure text-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                     </div>
-                    <div class="stat-title">Regelarbeitszeit</div>
+                    <div class="stat-title">${supervisorI18n.regularWorkingHours}</div>
                     <div class="stat-value">${userData.regelarbeitszeit}h</div>
-                    <div class="stat-desc">pro Tag</div>
+                    <div class="stat-desc">${supervisorI18n.hoursPerDay}</div>
                 </div>
                 
                 <div class="stat bg-base-100 rounded-box shadow-lg">
                     <div class="stat-figure text-secondary">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
                     </div>
-                    <div class="stat-title">Gearbeitete Tage</div>
+                    <div class="stat-title">${supervisorI18n.workedDays}</div>
                     <div class="stat-value">${userData.total_days}</div>
-                    <div class="stat-desc">in diesem Zeitraum</div>
+                    <div class="stat-desc">${supervisorI18n.inThisPeriod}</div>
                 </div>
 
                 <div class="stat bg-base-100 rounded-box shadow-lg">
@@ -700,7 +737,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     </div>
                     <div class="stat-title">Gesamtarbeitsstunden</div>
                     <div class="stat-value">${userData.total_hours.toFixed(2)}</div>
-                    <div class="stat-desc">Stunden insgesamt</div>
+                    <div class="stat-desc">${supervisorI18n.totalHours}</div>
                 </div>
             </div>
 
@@ -709,31 +746,31 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     <div class="stat-figure text-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
                     </div>
-                    <div class="stat-title">Durchschnitt pro Tag</div>
+                    <div class="stat-title"><?= DASHBOARD_AVERAGE_DAILY_HOURS ?></div>
                     <div class="stat-value">${userData.avg_hours_per_day.toFixed(2)}h</div>
-                    <div class="stat-desc">Arbeitsstunden</div>
+                    <div class="stat-desc">${supervisorI18n.workingHours}</div>
                 </div>
 
                 <div class="stat bg-base-100 rounded-box shadow-lg">
                     <div class="stat-figure ${userData.ueberstunden.startsWith('-') ? 'text-error' : 'text-success'}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
-                    <div class="stat-title">Überstunden</div>
+                    <div class="stat-title">${supervisorI18n.overtime}</div>
                     <div class="stat-value ${userData.ueberstunden.startsWith('-') ? 'text-error' : 'text-success'}">${userData.ueberstunden}</div>
-                    <div class="stat-desc">${userData.ueberstunden.startsWith('-') ? 'Minusstunden' : 'Überstunden'}</div>
+                    <div class="stat-desc">${userData.ueberstunden.startsWith('-') ? supervisorI18n.undertime : supervisorI18n.overtime}</div>
                 </div>
             </div>
 
             <div class="alert alert-info shadow-lg mt-6">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 <div>
-                    <h3 class="font-bold">Hinweis</h3>
-                    <div class="text-xs">Diese Übersicht basiert auf den aktuellen Daten und kann sich täglich ändern.</div>
+                    <h3 class="font-bold">${supervisorI18n.noticeTitle}</h3>
+                    <div class="text-xs">${supervisorI18n.notice}</div>
                 </div>
             </div>
         `;
             } else {
-                modalContent.innerHTML = '<div class="alert alert-warning">Keine detaillierten Daten verfügbar.</div>';
+                modalContent.innerHTML = `<div class="alert alert-warning">${supervisorI18n.noDetails}</div>`;
             }
 
             modal.showModal();
@@ -774,7 +811,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                 const row = `
                 <tr class="hover:bg-base-200 transition-colors duration-200">
                     <td>${zeit.username}</td>
-                    <td>${zeit.weekNumber}</td>
+                    <td>${zeit.week_number}</td>
                     <td>${start.toLocaleString()}</td>
                     <td>${end.toLocaleString()}</td>
                     <td>${dauer}</td>
@@ -839,7 +876,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                 data: {
                     labels: overtimeData.map(d => d.label),
                     datasets: [{
-                        label: 'Überstunden',
+                        label: supervisorI18n.overtime,
                         data: overtimeData.map(d => d.value),
                         backgroundColor: overtimeData.map(d => d.value >= 0 ? 
                             'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
@@ -858,7 +895,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Stunden'
+                                text: supervisorI18n.chartHours
                             }
                         }
                     }
@@ -877,7 +914,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                 data: {
                     labels: Object.values(<?= json_encode($detaillierteDaten) ?>).map(d => d.username),
                     datasets: [{
-                        label: 'Regelarbeitszeit (Stunden)',
+                        label: supervisorI18n.chartRegularHours,
                         data: Object.values(<?= json_encode($detaillierteDaten) ?>).map(d => d.regelarbeitszeit),
                         backgroundColor: 'rgba(66, 153, 225, 0.7)',
                         borderColor: 'rgba(66, 153, 225, 1)',
@@ -892,7 +929,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Stunden pro Tag'
+                                text: supervisorI18n.chartHoursPerDay
                             }
                         }
                     }
@@ -956,7 +993,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                 .then(response => response.json())
                 .then(data => {
                     if (!data.success) {
-                        throw new Error(data.message || 'Ein Fehler ist aufgetreten');
+                        throw new Error(data.message || supervisorI18n.genericError);
                     }
 
                     Swal.fire({
@@ -969,7 +1006,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                 .catch(error => {
                     Swal.fire({
                         icon: 'error',
-                        title: 'Fehler',
+                        title: supervisorI18n.error,
                         text: error.message,
                         confirmButtonText: 'OK'
                     });
@@ -1008,7 +1045,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     .then(response => response.json())
                     .then(data => {
                         if (!data.success) {
-                            throw new Error(data.message || 'Ein Fehler ist aufgetreten');
+                            throw new Error(data.message || supervisorI18n.genericError);
                         }
 
                         Swal.fire({
@@ -1021,7 +1058,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     .catch(error => {
                         Swal.fire({
                             icon: 'error',
-                            title: 'Fehler',
+                            title: supervisorI18n.error,
                             text: error.message,
                             confirmButtonText: 'OK'
                         });
@@ -1038,8 +1075,8 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     if (selectedUsers.length === 0) {
                         Swal.fire({
                             icon: 'warning',
-                            title: 'Mitarbeiter auswählen',
-                            text: 'Bitte wählen Sie mindestens einen Mitarbeiter aus.',
+                            title: supervisorI18n.selectEmployeeTitle,
+                            text: supervisorI18n.selectAtLeastOneEmployee,
                             confirmButtonText: 'OK'
                         });
                         return;
@@ -1048,7 +1085,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     const submitButton = this.querySelector('button[type="submit"]');
                     const originalButtonHtml = submitButton.innerHTML;
                     submitButton.disabled = true;
-                    submitButton.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Versand läuft';
+                    submitButton.innerHTML = `<span class="loading loading-spinner loading-xs"></span> ${supervisorI18n.sending}`;
 
                     const formData = new FormData(this);
                     formData.append('action', 'mail_pdf_reports');
@@ -1060,7 +1097,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     .then(response => response.json())
                     .then(data => {
                         if (!data.success) {
-                            throw new Error(data.message || 'Ein Fehler ist aufgetreten');
+                            throw new Error(data.message || supervisorI18n.genericError);
                         }
 
                         Swal.fire({
@@ -1092,8 +1129,8 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     if (!selectedUser) {
                         Swal.fire({
                             icon: 'warning',
-                            title: 'Mitarbeiter auswählen',
-                            text: 'Bitte wählen Sie zuerst einen Mitarbeiter aus.',
+                            title: supervisorI18n.selectEmployeeTitle,
+                            text: supervisorI18n.selectEmployeeText,
                             confirmButtonText: 'OK'
                         });
                         return;
@@ -1110,8 +1147,8 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     if (!selectedUser) {
                         Swal.fire({
                             icon: 'warning',
-                            title: 'Mitarbeiter auswählen',
-                            text: 'Bitte wählen Sie zuerst einen Mitarbeiter aus.',
+                            title: supervisorI18n.selectEmployeeTitle,
+                            text: supervisorI18n.selectEmployeeText,
                             confirmButtonText: 'OK'
                         });
                         return;
@@ -1126,13 +1163,13 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     const row = this.closest('.supervisor-edit-row');
                     const reasonResult = await Swal.fire({
                         icon: 'question',
-                        title: 'Änderungsgrund',
+                        title: supervisorI18n.changeReason,
                         input: 'text',
-                        inputLabel: 'Warum wird dieser Zeiteintrag geändert?',
-                        inputValidator: value => value.trim() ? undefined : 'Bitte einen Grund angeben.',
+                        inputLabel: supervisorI18n.editReasonLabel,
+                        inputValidator: value => value.trim() ? undefined : supervisorI18n.reasonRequired,
                         showCancelButton: true,
-                        confirmButtonText: 'Speichern',
-                        cancelButtonText: 'Abbrechen'
+                        confirmButtonText: supervisorI18n.save,
+                        cancelButtonText: supervisorI18n.cancel
                     });
 
                     if (!reasonResult.isConfirmed) {
@@ -1156,7 +1193,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     .then(response => response.json())
                     .then(data => {
                         if (!data.success) {
-                            throw new Error(data.message || 'Ein Fehler ist aufgetreten');
+                            throw new Error(data.message || supervisorI18n.genericError);
                         }
 
                         Swal.fire({
@@ -1169,7 +1206,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     .catch(error => {
                         Swal.fire({
                             icon: 'error',
-                            title: 'Fehler',
+                            title: supervisorI18n.error,
                             text: error.message,
                             confirmButtonText: 'OK'
                         });
@@ -1182,15 +1219,15 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                     const row = this.closest('.supervisor-edit-row');
 
                     Swal.fire({
-                        title: 'Eintrag löschen?',
-                        text: 'Dieser Zeiteintrag wird dauerhaft gelöscht.',
+                        title: supervisorI18n.deleteEntryTitle,
+                        text: supervisorI18n.deleteEntryText,
                         icon: 'warning',
                         input: 'text',
-                        inputLabel: 'Warum wird dieser Zeiteintrag gelöscht?',
-                        inputValidator: value => value.trim() ? undefined : 'Bitte einen Grund angeben.',
+                        inputLabel: supervisorI18n.deleteReasonLabel,
+                        inputValidator: value => value.trim() ? undefined : supervisorI18n.reasonRequired,
                         showCancelButton: true,
-                        confirmButtonText: 'Ja, löschen',
-                        cancelButtonText: 'Abbrechen',
+                        confirmButtonText: supervisorI18n.deleteEntryButton,
+                        cancelButtonText: supervisorI18n.cancel,
                         confirmButtonColor: '#d33'
                     }).then(result => {
                         if (!result.isConfirmed) {
@@ -1209,12 +1246,12 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                         .then(response => response.text())
                         .then(data => {
                             if (data.trim() !== 'Successfully deleted') {
-                                throw new Error(data || 'Der Eintrag konnte nicht gelöscht werden.');
+                                throw new Error(data || supervisorI18n.deleteFailed);
                             }
 
                             Swal.fire({
                                 icon: 'success',
-                                title: 'Gelöscht',
+                                title: supervisorI18n.deleted,
                                 showConfirmButton: false,
                                 timer: 1200
                             }).then(() => window.location.reload());
@@ -1222,7 +1259,7 @@ if ($user_role === 'admin' || $user_role === 'supervisor') {
                         .catch(error => {
                             Swal.fire({
                                 icon: 'error',
-                                title: 'Fehler',
+                                title: supervisorI18n.error,
                                 text: error.message,
                                 confirmButtonText: 'OK'
                             });

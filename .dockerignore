@@ -2,7 +2,4 @@
 .ddev
 .idea
 .DS_Store
-backups u. releases
-browser_extension
-data_backup
 assets/db/timetracking.sqlite

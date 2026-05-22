@@ -6,10 +6,13 @@ require_once __DIR__ . '/app/audit/AuditLog.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+$lang = $_SESSION['lang'] ?? 'de';
+$lang = in_array($lang, ['de', 'en'], true) ? $lang : 'de';
+require_once __DIR__ . "/languages/$lang.php";
 
 if (!isset($_SESSION['user_id'])) {
     http_response_code(401);
-    die("Nicht angemeldet");
+    die(ERROR_NOT_LOGGED_IN);
 }
 
 $user_id = $_SESSION['user_id'];
@@ -81,7 +84,7 @@ function auditReasonForTimeChange($targetUserId): string
     $isThirdPartyChange = (int)$targetUserId !== (int)$user_id && in_array($user_role, ['admin', 'supervisor'], true);
 
     if ($isThirdPartyChange && $reason === '') {
-        sendJsonResponse(false, 'Bitte einen Grund für die nachträgliche Änderung angeben.', 400);
+        sendJsonResponse(false, ERROR_REASON_REQUIRED_FOR_CHANGE, 400);
     }
 
     return $reason;
@@ -132,7 +135,7 @@ if (isset($_POST['delete']) && $_POST['delete'] == 'true' && isset($_POST['id'])
     $record = getRecordForAccess($id);
     if (!$record) {
         http_response_code(403);
-        echo "Keine Berechtigung";
+        echo ERROR_NO_PERMISSION;
         exit;
     }
 
@@ -155,7 +158,7 @@ if (isset($_POST['delete']) && $_POST['delete'] == 'true' && isset($_POST['id'])
             $conn->rollBack();
         }
         http_response_code(500);
-        echo "Fehler beim Audit-Log: " . $e->getMessage();
+        echo ERROR_AUDIT_LOG . $e->getMessage();
         exit;
     }
 
@@ -182,14 +185,14 @@ if (isset($_POST['update']) && $_POST['update'] == 'true') {
 
         if (!$record) {
             http_response_code(403);
-            die("Datensatz nicht gefunden");
+            die(ERROR_RECORD_NOT_FOUND);
         }
 
         if ($column === 'startzeit' || $column === 'endzeit') {
             $value = normalizeDateTimeInput($value);
             if (!$value) {
                 http_response_code(400);
-                die("Ungültiges Datum.");
+                die(ERROR_INVALID_DATE);
             }
         }
 
@@ -202,7 +205,7 @@ if (isset($_POST['update']) && $_POST['update'] == 'true') {
             $end = new DateTime($new_endzeit);
             if ($end < $start) {
                 http_response_code(400);
-                die("Endzeit darf nicht vor der Startzeit liegen.");
+                die(ERROR_END_BEFORE_START);
             }
         }
 
@@ -234,7 +237,7 @@ if (isset($_POST['update']) && $_POST['update'] == 'true') {
                 $conn->rollBack();
             }
             http_response_code(500);
-            die("Fehler beim Audit-Log: " . $e->getMessage());
+            die(ERROR_AUDIT_LOG . $e->getMessage());
         }
 
         if (!empty($updated)) {
@@ -242,11 +245,11 @@ if (isset($_POST['update']) && $_POST['update'] == 'true') {
             exit;
         } else {
             http_response_code(400);
-            die("Fehler beim Aktualisieren der Daten");
+            die(ERROR_UPDATE_DATA);
         }
     } else {
         http_response_code(400);
-        echo "Ungültige Spalte";
+        echo ERROR_INVALID_COLUMN;
         exit;
     }
 }
@@ -258,7 +261,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
 
     if ($action === 'supervisor_create_user') {
         if ($user_role !== 'admin') {
-            sendJsonResponse(false, 'Keine Berechtigung.', 403);
+            sendJsonResponse(false, ERROR_NO_PERMISSION, 403);
         }
 
         $username = trim($_POST['username'] ?? '');
@@ -267,13 +270,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
         $forcePasswordChange = isset($_POST['force_password_change']) ? 1 : 0;
 
         if ($username === '' || $email === '' || $password === '') {
-            sendJsonResponse(false, 'Benutzername, E-Mail und Passwort sind erforderlich.', 400);
+            sendJsonResponse(false, ERROR_CREATE_USER_REQUIRED, 400);
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            sendJsonResponse(false, 'Bitte eine gültige E-Mail-Adresse eintragen.', 400);
+            sendJsonResponse(false, ERROR_INVALID_EMAIL, 400);
         }
         if (strlen($password) < 8) {
-            sendJsonResponse(false, 'Das Passwort muss mindestens 8 Zeichen lang sein.', 400);
+            sendJsonResponse(false, ERROR_PASSWORD_MIN_LENGTH, 400);
         }
         if (usernameExists($username)) {
             sendJsonResponse(false, 'Dieser Benutzername ist bereits vergeben.', 400);
@@ -288,19 +291,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $stmt = $conn->prepare("INSERT INTO users (username, password, email, role, supervisor_id, force_password_change) VALUES (?, ?, ?, 'user', ?, ?)");
         $stmt->execute([$username, $hashedPassword, $email, null, $forcePasswordChange]);
-        sendJsonResponse(true, 'Mitarbeiter wurde erstellt.');
+        sendJsonResponse(true, SAVE_EMPLOYEE_CREATED);
     }
 
     if ($action === 'supervisor_update_username') {
         if ($user_role !== 'admin') {
-            sendJsonResponse(false, 'Keine Berechtigung.', 403);
+            sendJsonResponse(false, ERROR_NO_PERMISSION, 403);
         }
 
         $targetUserId = (int)($_POST['user_id'] ?? 0);
         $newUsername = trim($_POST['username'] ?? '');
 
+        if (tpIsDemoAdminUserId($targetUserId)) {
+            sendJsonResponse(false, tpDemoModeMessage(), 403);
+        }
         if ($targetUserId <= 0 || !canManageUser($targetUserId) || $targetUserId === (int)$user_id) {
-            sendJsonResponse(false, 'Keine Berechtigung für diesen Benutzer.', 403);
+            sendJsonResponse(false, ERROR_NO_PERMISSION_USER, 403);
         }
         if ($newUsername === '') {
             sendJsonResponse(false, 'Der Benutzername darf nicht leer sein.', 400);
@@ -316,7 +322,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
 
     if ($action === 'mail_pdf_reports') {
         if ($user_role !== 'admin' && $user_role !== 'supervisor') {
-            sendJsonResponse(false, 'Keine Berechtigung.', 403);
+            sendJsonResponse(false, ERROR_NO_PERMISSION, 403);
         }
 
         $rawUserIds = $_POST['user_ids'] ?? [];
@@ -330,29 +336,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
         $pdfA = ($_POST['pdf_format'] ?? 'pdf') === 'pdfa';
 
         if (!$targetUserIds) {
-            sendJsonResponse(false, 'Bitte mindestens einen Mitarbeiter auswählen.', 400);
+            sendJsonResponse(false, ERROR_SELECT_AT_LEAST_ONE_EMPLOYEE, 400);
         }
 
         if (count($targetUserIds) > 50) {
-            sendJsonResponse(false, 'Bitte maximal 50 Mitarbeiter pro Versand auswählen.', 400);
+            sendJsonResponse(false, ERROR_MAX_50_EMPLOYEES, 400);
         }
 
         $sent = [];
         $failed = [];
         foreach ($targetUserIds as $targetUserId) {
             if (!canManageUser($targetUserId) || $targetUserId === (int)$user_id) {
-                $failed[] = 'Benutzer #' . $targetUserId . ': keine Berechtigung';
+                $failed[] = USERNAME . ' #' . $targetUserId . ': ' . ERROR_NO_PERMISSION;
                 continue;
             }
 
             $recipient = tpPdfFetchUser($targetUserId);
             if (!$recipient) {
-                $failed[] = 'Benutzer #' . $targetUserId . ': nicht gefunden';
+                $failed[] = USERNAME . ' #' . $targetUserId . ': ' . ERROR_USER_NOT_FOUND;
                 continue;
             }
 
             if (empty($recipient['email']) || !filter_var($recipient['email'], FILTER_VALIDATE_EMAIL)) {
-                $failed[] = $recipient['username'] . ': keine gültige E-Mail-Adresse';
+                $failed[] = $recipient['username'] . ': ' . ERROR_NO_VALID_EMAIL;
                 continue;
             }
 
@@ -404,7 +410,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
     if ($action === 'manual_add' || $action === 'update_record') {
         $targetUserId = (int)($_POST['user_id'] ?? $user_id);
         if (!canManageUser($targetUserId)) {
-            sendJsonResponse(false, 'Keine Berechtigung für diesen Benutzer.', 403);
+            sendJsonResponse(false, ERROR_NO_PERMISSION_USER, 403);
         }
 
         $startzeit_iso = normalizeDateTimeInput($_POST['startzeit'] ?? '');
@@ -414,7 +420,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
         $beschreibung = trim($_POST['beschreibung'] ?? '');
 
         if (!$startzeit_iso || !$endzeit_iso) {
-            sendJsonResponse(false, 'Startzeit und Endzeit müssen gültig sein.', 400);
+            sendJsonResponse(false, ERROR_START_END_VALID, 400);
         }
 
         $startzeit = new DateTime($startzeit_iso);
@@ -425,7 +431,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
 
         $workedMinutes = max(0, floor(($endzeit->getTimestamp() - $startzeit->getTimestamp()) / 60) - $pause);
         if ($workedMinutes <= 0) {
-            sendJsonResponse(false, 'Arbeitszeit muss nach Abzug der Pause größer als 0 sein.', 400);
+            sendJsonResponse(false, ERROR_WORK_TIME_POSITIVE, 400);
         }
 
         if ($action === 'manual_add') {
@@ -441,15 +447,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
                 if ($conn->inTransaction()) {
                     $conn->rollBack();
                 }
-                sendJsonResponse(false, 'Audit-Log konnte nicht geschrieben werden: ' . $e->getMessage(), 500);
+                sendJsonResponse(false, ERROR_AUDIT_LOG_WRITE . $e->getMessage(), 500);
             }
-            sendJsonResponse(true, 'Zeiteintrag wurde hinzugefügt.');
+            sendJsonResponse(true, SAVE_TIME_ENTRY_ADDED);
         }
 
         $recordId = (int)($_POST['id'] ?? 0);
         $record = getRecordForAccess($recordId);
         if (!$record) {
-            sendJsonResponse(false, 'Datensatz nicht gefunden oder keine Berechtigung.', 403);
+            sendJsonResponse(false, ERROR_RECORD_NOT_FOUND_OR_PERMISSION, 403);
         }
 
         $targetUserId = (int)$record['user_id'];
@@ -464,9 +470,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
             if ($conn->inTransaction()) {
                 $conn->rollBack();
             }
-            sendJsonResponse(false, 'Audit-Log konnte nicht geschrieben werden: ' . $e->getMessage(), 500);
+            sendJsonResponse(false, ERROR_AUDIT_LOG_WRITE . $e->getMessage(), 500);
         }
-        sendJsonResponse(true, 'Zeiteintrag wurde aktualisiert.');
+        sendJsonResponse(true, SAVE_TIME_ENTRY_UPDATED);
     }
 
     if ($action === 'start') {
@@ -488,13 +494,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
                 $conn->commit();
                 echo json_encode([
                     'success' => true,
-                    'message' => 'Arbeitszeit erfolgreich gestartet!'
+                    'message' => SAVE_START_WORK_SUCCESS
                 ]);
             } else {
                 $conn->rollBack();
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Fehler beim Starten der Arbeitszeit.'
+                    'message' => SAVE_START_WORK_ERROR
                 ]);
             }
         } catch (Throwable $e) {
@@ -504,7 +510,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
             http_response_code(500);
             echo json_encode([
                 'success' => false,
-                'message' => 'Audit-Log konnte nicht geschrieben werden: ' . $e->getMessage()
+                'message' => ERROR_AUDIT_LOG_WRITE . $e->getMessage()
             ]);
         }
         exit();
@@ -526,7 +532,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
                 http_response_code(400);
                 echo json_encode([
                     'success' => false,
-                    'message' => "Endzeit darf nicht vor der Startzeit liegen."
+                    'message' => ERROR_END_BEFORE_START
                 ]);
                 exit;
             }
@@ -543,13 +549,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
                     $conn->commit();
                     echo json_encode([
                         'success' => true,
-                        'message' => "Arbeitszeit erfolgreich beendet!"
+                        'message' => SAVE_END_WORK_SUCCESS
                     ]);
                 } else {
                     $conn->rollBack();
                     echo json_encode([
                         'success' => false,
-                        'message' => "Fehler beim Beenden der Arbeitszeit."
+                        'message' => SAVE_END_WORK_ERROR
                     ]);
                 }
             } catch (Throwable $e) {
@@ -559,13 +565,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
                 http_response_code(500);
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Audit-Log konnte nicht geschrieben werden: ' . $e->getMessage()
+                    'message' => ERROR_AUDIT_LOG_WRITE . $e->getMessage()
                 ]);
             }
         } else {
             echo json_encode([
                 'success' => false,
-                'message' => "Kein offener Arbeitszeitentrageintrag gefunden."
+                'message' => ERROR_NO_OPEN_TIME_ENTRY
             ]);
         }
         exit();
@@ -611,7 +617,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["urlaubStart"]) && isse
         $eingetragene_tage++;
     }
 
-    echo "{$beschreibung} von {$start->format('d.m.Y')} bis {$end->modify('-1 day')->format('d.m.Y')} wurde eingetragen. {$eingetragene_tage} Tage wurden erfasst.";
+    echo sprintf(SAVE_SPECIAL_DAYS_ADDED, $beschreibung, $start->format('d.m.Y'), $end->modify('-1 day')->format('d.m.Y'), $eingetragene_tage);
 }
 
 // After processing, ensure no flags are set to display event selection fields
@@ -624,14 +630,6 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// PDO-Verbindung herstellen
-try {
-    $conn = new PDO("sqlite:$database");
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Verbindungsfehler: " . $e->getMessage());
-}
-
 // Überprüfen, ob es sich um eine AJAX-Anfrage handelt
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id'], $_POST['column'], $_POST['data'])) {
     $id = intval($_POST['id']);
@@ -642,14 +640,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id'], $_POST['column'
     $allowedColumns = ['standort', 'beschreibung'];
     if (!in_array($column, $allowedColumns)) {
         http_response_code(400);
-        echo "Ungültige Spalte.";
+        echo ERROR_INVALID_COLUMN;
         exit();
     }
 
     $oldRecord = tpAuditFetchTimeRecord($id);
     if (!$oldRecord || (int)$oldRecord['user_id'] !== (int)$user_id) {
         http_response_code(403);
-        echo "Keine Berechtigung.";
+        echo ERROR_NO_PERMISSION;
         exit();
     }
 
@@ -664,11 +662,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id'], $_POST['column'
         if ($stmt->execute()) {
             tpAuditRecord('update', 'zeiterfassung', $id, (int)$user_id, $oldRecord, tpAuditFetchTimeRecord($id), '');
             $conn->commit();
-            echo "Erfolg";
+            echo SAVE_SUCCESS;
         } else {
             $conn->rollBack();
             http_response_code(500);
-            echo "Fehler beim Aktualisieren.";
+            echo SAVE_UPDATE_ERROR;
         }
     } catch (PDOException $e) {
         if ($conn->inTransaction()) {
